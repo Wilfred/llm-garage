@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(tsx *)",
+      "Bash(curl *)",
+      "Bash(git *)",
+      "Bash(docker *)",
+      "Bash(mkdir *)",
+      "Bash(kill *)",
+      "Bash(pkill *)"
+    ]
+  }
+}
