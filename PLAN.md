@@ -340,11 +340,8 @@ Each milestone lists **Build** and **Definition of done** (verification). Do not
 milestone N+1 until N's definition of done has been demonstrated. Commit + push at each
 boundary. Mark milestones done in this file as you go.
 
-### M0 — Utterly trivial Node website, packaged in Docker ✅ done (this PR)
+### M0 — Utterly trivial Node website, packaged in Docker ✅ done (merged, PR #1)
 
-> Verified in-session with `node` + `curl`; this is the first milestone PR. Verify the
-> image on a Docker host:
-> `docker build -t llm-garage . && docker run --rm -p 3000:3000 llm-garage`.
 > The trivial `server.mjs` + `Dockerfile` are replaced by the TypeScript app in M1.
 
 **The first deployed artifact.** No TypeScript, no dependencies, no framework.
@@ -360,7 +357,7 @@ user, `CMD ["node","server.mjs"]`) and `.dockerignore`.
 - On a Docker host: `docker build -t llm-garage . && docker run --rm -p 3000:3000
   llm-garage` then the same curls. **Deploy this before continuing.**
 
-### M1 — TypeScript + Express + JSX skeleton 🔜 built, ships in the next PR (with M2)
+### M1 — TypeScript + Express + JSX skeleton ✅ done (this PR)
 
 **Build:** full scaffolding (package.json scripts `dev/build/start/lint/format`,
 tsconfig per above, eslint flat config, prettier, `.env.example`, `.gitignore`);
@@ -372,12 +369,12 @@ yet). Delete `server.mjs`. Evolve `Dockerfile` into a multi-stage build
 `/healthz`; `npm run build && npm start` + same curls; on a Docker host,
 `docker build` + `docker run` + same curls.
 
-### M2 — TypeORM + SQLite wired 🔜 built, ships in the next PR (with M1)
+### M2 — TypeORM + SQLite wired 🔜 built, ships in the next PR
 
-> Verified in-session: lint (eslint + xss-scan) clean; `tsx` dev server and compiled
-> `node dist/` both serve `/` and `/healthz` → `{"ok":true,"db":true}`; `data/app.db`
-> created with WAL. **Pending on a Docker host:** `docker build -t llm-garage . &&
-> docker run --rm -p 3000:3000 -v llm-garage-data:/app/data llm-garage` + same curls.
+> Built and verified (dev + compiled `node dist/` serve `/healthz` → `{"ok":true,"db":true}`,
+> `data/app.db` with WAL); ships as the follow-up PR after M1 merges. Adds
+> `src/db/data-source.ts`, the `Setting` entity, the DB deps (better-sqlite3, typeorm,
+> reflect-metadata), the `/healthz` db check, and the data-dir volume in the Dockerfile.
 > Note: TypeScript pinned to 5.9 (kitajs ts-html-plugin peer requires ^5.9.3, not TS 6).
 
 **Build:** `src/db/data-source.ts` (better-sqlite3, WAL, `synchronize: true`, db file at
