@@ -19,6 +19,10 @@ export function NewSessionPage({
       <div class="page-header">
         <div>
           <h1>New session</h1>
+          <p>
+            Runs a scripted local worker. No model calls or repository changes
+            are made yet.
+          </p>
         </div>
       </div>
       {error && <div class="notice">{error}</div>}
@@ -107,7 +111,7 @@ export function NewSessionPage({
             </div>
           </fieldset>
           <button class="button button-primary" type="submit">
-            Start prototype session
+            Start dummy session
           </button>
         </form>
       )}
@@ -187,7 +191,7 @@ export function SessionDetailPage({
         <section class="transcript">
           <div class="section-heading">
             <h2>Transcript</h2>
-            <span class="count">Refresh to see the prototype run advance</span>
+            <span class="count">Dummy worker events appear as it runs</span>
           </div>
           {transcript.map(({ turn, events }, index) => (
             <article class="card">

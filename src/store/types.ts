@@ -50,7 +50,7 @@ export type Turn = {
 export type RunEvent = {
   id: string;
   turnId: string;
-  kind: "log" | "status" | "system";
+  kind: "log" | "model_output" | "status" | "system" | "tool" | "usage";
   data: string;
   ts: Date;
 };
