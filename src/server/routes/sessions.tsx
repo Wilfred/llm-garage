@@ -4,44 +4,21 @@ import {
   NewSessionPage,
   NotFoundPage,
   SessionDetailPage,
+  SessionsPage,
   type TurnTranscript,
 } from "../../views/pages/sessions";
 import { renderPage } from "../../views/render";
 import { formField } from "./forms";
 
-const newSessionScript = `(() => {
-  const repo = document.querySelector("#repo-id");
-  const extra = document.querySelector("#system-prompt-extra");
-  const preview = document.querySelector("#composed-preview");
-  const createPr = document.querySelector("#create-pr");
-  const autoMerge = document.querySelector("#auto-merge");
-  if (!repo || !extra || !preview) return;
-  let request = 0;
-  const update = async () => {
-    const current = ++request;
-    const params = new URLSearchParams({ repoId: repo.value, extra: extra.value });
-    const response = await fetch("/sessions/compose-preview?" + params.toString());
-    if (response.ok && current === request) preview.value = (await response.json()).composed;
-  };
-  repo.addEventListener("change", update);
-  extra.addEventListener("input", update);
-  if (createPr && autoMerge) {
-    createPr.addEventListener("change", () => { autoMerge.disabled = !createPr.checked; if (!createPr.checked) autoMerge.checked = false; });
-    autoMerge.addEventListener("change", () => { if (autoMerge.checked) createPr.checked = true; });
-  }
-})();`;
-
 export function createSessionsRouter(store: DataStore): Router {
   const router = Router();
 
-  router.get("/assets/new-session.js", (_req, res) => {
-    res.type("application/javascript").send(newSessionScript);
-  });
-
-  router.get("/sessions/compose-preview", async (req, res) => {
-    const repoId = typeof req.query.repoId === "string" ? req.query.repoId : "";
-    const extra = typeof req.query.extra === "string" ? req.query.extra : "";
-    res.json({ composed: await store.composeSystemPrompt(repoId, extra) });
+  router.get("/sessions", async (_req, res) => {
+    const [repos, sessions] = await Promise.all([
+      store.listRepos(),
+      store.listSessions(),
+    ]);
+    res.type("html").send(renderPage(<SessionsPage repos={repos} sessions={sessions} />));
   });
 
   router.get("/sessions/new", async (_req, res) => {
@@ -49,20 +26,9 @@ export function createSessionsRouter(store: DataStore): Router {
       store.listRepos(),
       store.listSessions(),
     ]);
-    const initialPreview = repos[0]
-      ? await store.composeSystemPrompt(repos[0].id, "")
-      : "";
     res
       .type("html")
-      .send(
-        renderPage(
-          <NewSessionPage
-            repos={repos}
-            sessions={sessions}
-            initialPreview={initialPreview}
-          />,
-        ),
-      );
+      .send(renderPage(<NewSessionPage repos={repos} sessions={sessions} />));
   });
 
   router.post("/sessions", async (req, res) => {
@@ -76,12 +42,6 @@ export function createSessionsRouter(store: DataStore): Router {
         store.listRepos(),
         store.listSessions(),
       ]);
-      const initialPreview = repoId
-        ? await store.composeSystemPrompt(
-            repoId,
-            formField(req.body, "systemPromptExtra"),
-          )
-        : "";
       res
         .status(400)
         .type("html")
@@ -90,7 +50,6 @@ export function createSessionsRouter(store: DataStore): Router {
             <NewSessionPage
               repos={repos}
               sessions={sessions}
-              initialPreview={initialPreview}
               error="Repository, title, and task are required."
             />,
           ),
@@ -103,7 +62,6 @@ export function createSessionsRouter(store: DataStore): Router {
       title,
       taskPrompt,
       runner,
-      systemPromptExtra: formField(req.body, "systemPromptExtra"),
       createPr:
         formField(req.body, "createPr") === "yes" ||
         formField(req.body, "autoMerge") === "yes",

@@ -1,14 +1,11 @@
 import type {
-  CreatePromptInput,
   CreateRepoInput,
   CreateSessionInput,
   DataStore,
   DeleteRepoResult,
-  PromptVersion,
   Repo,
   RunEvent,
   Session,
-  SystemPrompt,
   Turn,
 } from "./types";
 
@@ -21,14 +18,11 @@ const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60
 
 export class MemoryDataStore implements DataStore {
   private readonly repos = new Map<string, Repo>();
-  private readonly prompts = new Map<string, SystemPrompt>();
-  private readonly versions = new Map<string, PromptVersion>();
   private readonly sessions = new Map<string, Session>();
   private readonly turns = new Map<string, Turn>();
   private readonly events = new Map<string, RunEvent>();
   private readonly timers = new Map<string, NodeJS.Timeout[]>();
   private readonly simulationStepMs: number;
-  private basePromptId?: string;
   private sequence = 100;
   private lastTimestamp = 0;
 
@@ -53,92 +47,10 @@ export class MemoryDataStore implements DataStore {
 
   async deleteRepo(id: string): Promise<DeleteRepoResult> {
     if (!this.repos.has(id)) return "not_found";
-    const inUse =
-      [...this.prompts.values()].some((prompt) => prompt.repoId === id) ||
-      [...this.sessions.values()].some((session) => session.repoId === id);
+    const inUse = [...this.sessions.values()].some((session) => session.repoId === id);
     if (inUse) return "in_use";
     this.repos.delete(id);
     return "deleted";
-  }
-
-  async listPrompts(): Promise<SystemPrompt[]> {
-    return this.byNewest(this.prompts.values());
-  }
-
-  async getPrompt(id: string): Promise<SystemPrompt | undefined> {
-    return this.prompts.get(id);
-  }
-
-  async createPrompt(input: CreatePromptInput): Promise<SystemPrompt> {
-    if (input.scope === "repo" && !input.repoId) {
-      throw new Error("A repository prompt must name a repository");
-    }
-    const prompt: SystemPrompt = {
-      id: this.id("prompt"),
-      name: input.name,
-      scope: input.scope,
-      repoId: input.scope === "repo" ? input.repoId : undefined,
-      createdAt: this.now(),
-    };
-    this.prompts.set(prompt.id, prompt);
-    await this.addPromptVersion(prompt.id, input.content, input.note);
-    return prompt;
-  }
-
-  async listPromptVersions(promptId: string): Promise<PromptVersion[]> {
-    return this.byNewest(
-      [...this.versions.values()].filter((version) => version.promptId === promptId),
-    );
-  }
-
-  async addPromptVersion(
-    promptId: string,
-    content: string,
-    note?: string,
-  ): Promise<PromptVersion> {
-    if (!this.prompts.has(promptId)) throw new Error("Prompt not found");
-    const version: PromptVersion = {
-      id: this.id("version"),
-      promptId,
-      content,
-      note,
-      createdAt: this.now(),
-    };
-    this.versions.set(version.id, version);
-    return version;
-  }
-
-  async getBasePromptId(): Promise<string | undefined> {
-    return this.basePromptId;
-  }
-
-  async setBasePrompt(promptId: string | undefined): Promise<void> {
-    if (promptId) {
-      const prompt = this.prompts.get(promptId);
-      if (!prompt || prompt.scope !== "global") {
-        throw new Error("Base prompt must be a global prompt");
-      }
-    }
-    this.basePromptId = promptId;
-  }
-
-  async composeSystemPrompt(repoId: string, extra: string): Promise<string> {
-    const sections: string[] = [];
-    if (this.basePromptId) {
-      const base = this.prompts.get(this.basePromptId);
-      const version = base && this.latestVersion(base.id);
-      if (base && version) sections.push(`## ${base.name}\n\n${version.content}`);
-    }
-
-    const repoPrompts = [...this.prompts.values()]
-      .filter((prompt) => prompt.scope === "repo" && prompt.repoId === repoId)
-      .sort((left, right) => left.name.localeCompare(right.name));
-    for (const prompt of repoPrompts) {
-      const version = this.latestVersion(prompt.id);
-      if (version) sections.push(`## ${prompt.name}\n\n${version.content}`);
-    }
-    if (extra.trim()) sections.push(`## Session instructions\n\n${extra.trim()}`);
-    return sections.join("\n\n");
   }
 
   async listSessions(): Promise<Session[]> {
@@ -166,11 +78,6 @@ export class MemoryDataStore implements DataStore {
       status: "running",
       runner: input.runner,
       taskPrompt: input.taskPrompt,
-      systemPromptExtra: input.systemPromptExtra,
-      composedSystemPrompt: await this.composeSystemPrompt(
-        input.repoId,
-        input.systemPromptExtra,
-      ),
       createPr: input.createPr,
       autoMerge: input.autoMerge,
       createdAt: now,
@@ -183,7 +90,6 @@ export class MemoryDataStore implements DataStore {
       sessionId: session.id,
       kind: parent ? "spawn" : "initial",
       prompt: input.taskPrompt,
-      composedSystemPrompt: session.composedSystemPrompt,
       status: "running",
       createdAt: now,
     };
@@ -216,7 +122,6 @@ export class MemoryDataStore implements DataStore {
       sessionId,
       kind: "feedback",
       prompt: feedback,
-      composedSystemPrompt: session.composedSystemPrompt,
       status: "running",
       createdAt: now,
     };
@@ -262,7 +167,7 @@ export class MemoryDataStore implements DataStore {
     this.addEvent(turnId, "status", "Prototype runner started");
     const lines = [
       "Preparing an isolated workspace…",
-      "Reading the repository and composed system prompt…",
+      "Reading the repository and task…",
       "Prototype work complete; waiting for your review.",
     ];
     const handles = lines.map((line, index) =>
@@ -325,12 +230,6 @@ export class MemoryDataStore implements DataStore {
     this.events.set(event.id, event);
   }
 
-  private latestVersion(promptId: string): PromptVersion | undefined {
-    return [...this.versions.values()]
-      .filter((version) => version.promptId === promptId)
-      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
-  }
-
   private byNewest<T extends { createdAt: Date }>(items: Iterable<T>): T[] {
     return [...items].sort(
       (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
@@ -372,89 +271,6 @@ export class MemoryDataStore implements DataStore {
       },
     ];
     for (const repo of repos) this.repos.set(repo.id, repo);
-
-    const prompts: SystemPrompt[] = [
-      {
-        id: "prompt-base",
-        name: "Careful coding agent",
-        scope: "global",
-        createdAt: minutesAgo(6_000),
-      },
-      {
-        id: "prompt-tests",
-        name: "llm-garage conventions",
-        scope: "repo",
-        repoId: "repo-garage",
-        createdAt: minutesAgo(5_000),
-      },
-      {
-        id: "prompt-parser",
-        name: "Parser maintenance",
-        scope: "repo",
-        repoId: "repo-parser",
-        createdAt: minutesAgo(4_000),
-      },
-    ];
-    for (const prompt of prompts) this.prompts.set(prompt.id, prompt);
-    this.basePromptId = "prompt-base";
-
-    const versions: PromptVersion[] = [
-      {
-        id: "version-base-1",
-        promptId: "prompt-base",
-        content: "Make small, reviewable changes and explain important tradeoffs.",
-        note: "Initial",
-        createdAt: minutesAgo(5_900),
-      },
-      {
-        id: "version-base-2",
-        promptId: "prompt-base",
-        content:
-          "Make small, reviewable changes. Run focused tests, preserve user work, and explain important tradeoffs.",
-        note: "Add verification",
-        createdAt: minutesAgo(3_900),
-      },
-      {
-        id: "version-base-3",
-        promptId: "prompt-base",
-        content:
-          "Make small, reviewable changes. Run focused tests, preserve user work, and leave the repository in a state another engineer can continue from.",
-        note: "Clarify handoff",
-        createdAt: minutesAgo(900),
-      },
-      {
-        id: "version-tests-1",
-        promptId: "prompt-tests",
-        content: "Use strict TypeScript and Node's built-in test runner.",
-        note: "Initial",
-        createdAt: minutesAgo(4_900),
-      },
-      {
-        id: "version-tests-2",
-        promptId: "prompt-tests",
-        content:
-          "Use strict TypeScript and Node's built-in test runner. Render dynamic HTML through Preact JSX.",
-        note: "Record rendering choice",
-        createdAt: minutesAgo(800),
-      },
-      {
-        id: "version-parser-1",
-        promptId: "prompt-parser",
-        content:
-          "Keep grammar changes narrow and add a corpus test for every changed parse.",
-        note: "Initial",
-        createdAt: minutesAgo(3_900),
-      },
-      {
-        id: "version-parser-2",
-        promptId: "prompt-parser",
-        content:
-          "Keep grammar changes narrow, add corpus tests, and inspect generated conflicts before committing.",
-        note: "Conflict checks",
-        createdAt: minutesAgo(700),
-      },
-    ];
-    for (const version of versions) this.versions.set(version.id, version);
 
     const sessions: Session[] = [
       this.fixtureSession(
@@ -517,7 +333,6 @@ export class MemoryDataStore implements DataStore {
         sessionId: session.id,
         kind: session.parentId ? "spawn" : "initial",
         prompt: session.taskPrompt,
-        composedSystemPrompt: session.composedSystemPrompt,
         status,
         createdAt: session.createdAt,
         finishedAt:
@@ -564,9 +379,6 @@ export class MemoryDataStore implements DataStore {
       status,
       runner: id === "session-docs" ? "echo" : "codex",
       taskPrompt: title,
-      systemPromptExtra: "Keep the result focused and easy to review.",
-      composedSystemPrompt:
-        "## Careful coding agent\n\nMake small, reviewable changes.\n\n## Session instructions\n\nKeep the result focused and easy to review.",
       createPr: id !== "session-parser",
       autoMerge: id === "session-tests",
       createdAt: minutesAgo(minutes + 15),

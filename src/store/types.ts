@@ -6,24 +6,6 @@ export type Repo = {
   createdAt: Date;
 };
 
-export type PromptScope = "global" | "repo";
-
-export type SystemPrompt = {
-  id: string;
-  name: string;
-  scope: PromptScope;
-  repoId?: string;
-  createdAt: Date;
-};
-
-export type PromptVersion = {
-  id: string;
-  promptId: string;
-  content: string;
-  note?: string;
-  createdAt: Date;
-};
-
 export type SessionStatus =
   | "queued"
   | "running"
@@ -44,8 +26,6 @@ export type Session = {
   status: SessionStatus;
   runner: RunnerName;
   taskPrompt: string;
-  systemPromptExtra: string;
-  composedSystemPrompt: string;
   createPr: boolean;
   autoMerge: boolean;
   prUrl?: string;
@@ -61,7 +41,6 @@ export type Turn = {
   sessionId: string;
   kind: TurnKind;
   prompt: string;
-  composedSystemPrompt: string;
   status: TurnStatus;
   createdAt: Date;
   finishedAt?: Date;
@@ -77,21 +56,12 @@ export type RunEvent = {
 
 export type CreateRepoInput = Pick<Repo, "owner" | "name" | "defaultBranch">;
 
-export type CreatePromptInput = {
-  name: string;
-  scope: PromptScope;
-  repoId?: string;
-  content: string;
-  note?: string;
-};
-
 export type CreateSessionInput = {
   repoId: string;
   parentId?: string;
   title: string;
   runner: RunnerName;
   taskPrompt: string;
-  systemPromptExtra: string;
   createPr: boolean;
   autoMerge: boolean;
 };
@@ -103,19 +73,6 @@ export interface DataStore {
   getRepo(id: string): Promise<Repo | undefined>;
   createRepo(input: CreateRepoInput): Promise<Repo>;
   deleteRepo(id: string): Promise<DeleteRepoResult>;
-
-  listPrompts(): Promise<SystemPrompt[]>;
-  getPrompt(id: string): Promise<SystemPrompt | undefined>;
-  createPrompt(input: CreatePromptInput): Promise<SystemPrompt>;
-  listPromptVersions(promptId: string): Promise<PromptVersion[]>;
-  addPromptVersion(
-    promptId: string,
-    content: string,
-    note?: string,
-  ): Promise<PromptVersion>;
-  getBasePromptId(): Promise<string | undefined>;
-  setBasePrompt(promptId: string | undefined): Promise<void>;
-  composeSystemPrompt(repoId: string, extra: string): Promise<string>;
 
   listSessions(): Promise<Session[]>;
   getSession(id: string): Promise<Session | undefined>;

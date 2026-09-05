@@ -1,5 +1,4 @@
 import type { Repo } from "../../store/types";
-import { formatDate } from "../components";
 import { Layout } from "../layout";
 
 export function ReposPage({ repos, notice }: { repos: Repo[]; notice?: string }) {
@@ -8,51 +7,22 @@ export function ReposPage({ repos, notice }: { repos: Repo[]; notice?: string })
     <Layout title="Repositories" section="repos">
       <div class="page-header">
         <div>
-          <div class="eyebrow">Sources</div>
           <h1>Repositories</h1>
-          <p>Repositories available when you start an agent session.</p>
         </div>
       </div>
       {notice && <div class={success ? "notice notice-success" : "notice"}>{notice}</div>}
       <div class="split">
         <section>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Repository</th>
-                  <th>Default branch</th>
-                  <th>Added</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {repos.map((repo) => (
-                  <tr>
-                    <td>
-                      <strong>
-                        {repo.owner}/{repo.name}
-                      </strong>
-                    </td>
-                    <td>
-                      <code>{repo.defaultBranch}</code>
-                    </td>
-                    <td>
-                      <time dateTime={repo.createdAt.toISOString()}>
-                        {formatDate(repo.createdAt)}
-                      </time>
-                    </td>
-                    <td>
-                      <form method="post" action={`/repos/${repo.id}/delete`}>
-                        <button class="button button-danger" type="submit">
-                          Delete
-                        </button>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div class="card">
+            <ul class="repo-list">
+              {repos.map((repo) => (
+                <li>
+                  <strong>
+                    {repo.owner}/{repo.name}
+                  </strong>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
         <section class="card sticky">

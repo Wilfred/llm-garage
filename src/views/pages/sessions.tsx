@@ -1,28 +1,21 @@
 import type { Repo, RunEvent, Session, Turn } from "../../store/types";
-import { formatDate, StatusBadge } from "../components";
+import { formatDate, SessionCards, StatusBadge } from "../components";
 import { Layout } from "../layout";
 
 export function NewSessionPage({
   repos,
   sessions,
-  initialPreview,
   error,
 }: {
   repos: Repo[];
   sessions: Session[];
-  initialPreview: string;
   error?: string;
 }) {
   return (
-    <Layout title="New session" section="sessions" scripts={["/assets/new-session.js"]}>
+    <Layout title="New session" section="sessions">
       <div class="page-header">
         <div>
-          <div class="eyebrow">New work</div>
-          <h1>Start a session</h1>
-          <p>
-            Choose the repository and instructions. The preview is the exact system prompt
-            snapshot the runner will receive.
-          </p>
+          <h1>New session</h1>
         </div>
       </div>
       {error && <div class="notice">{error}</div>}
@@ -32,94 +25,74 @@ export function NewSessionPage({
           <a href="/repos">Go to repositories</a>.
         </div>
       ) : (
-        <form id="new-session-form" class="split" method="post" action="/sessions">
-          <section class="card stack">
-            <div class="field-row">
-              <label>
-                Repository
-                <select id="repo-id" name="repoId" required>
-                  {repos.map((repo) => (
-                    <option value={repo.id}>
-                      {repo.owner}/{repo.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Runner
-                <select name="runner">
-                  <option value="codex">Codex</option>
-                  <option value="echo">Echo (test)</option>
-                </select>
-              </label>
-            </div>
+        <form class="card stack form-card" method="post" action="/sessions">
+          <div class="field-row">
             <label>
-              Session title
-              <input name="title" required placeholder="Improve the settings workflow" />
-            </label>
-            <label>
-              Task for the agent
-              <textarea
-                name="taskPrompt"
-                required
-                placeholder="Describe the outcome you want…"
-              />
-            </label>
-            <label>
-              Extra system instructions{" "}
-              <span class="help">Added after the base and repository prompts.</span>
-              <textarea
-                id="system-prompt-extra"
-                name="systemPromptExtra"
-                placeholder="For this session only…"
-              />
-            </label>
-            <label>
-              Parent session{" "}
-              <span class="help">
-                Optional: make this session part of an existing work tree.
-              </span>
-              <select name="parentId">
-                <option value="">No parent</option>
-                {sessions
-                  .filter(({ status }) => status !== "archived")
-                  .map((session) => (
-                    <option value={session.id}>{session.title}</option>
-                  ))}
+              Repository
+              <select name="repoId" required>
+                {repos.map((repo) => (
+                  <option value={repo.id}>
+                    {repo.owner}/{repo.name}
+                  </option>
+                ))}
               </select>
             </label>
-            <fieldset>
-              <legend>After the run</legend>
-              <div class="check-row">
-                <label class="check">
-                  <input
-                    id="create-pr"
-                    type="checkbox"
-                    name="createPr"
-                    value="yes"
-                    checked
-                  />{" "}
-                  Create a pull request
-                </label>
-                <label class="check">
-                  <input id="auto-merge" type="checkbox" name="autoMerge" value="yes" />{" "}
-                  Auto-merge when CI passes
-                </label>
-              </div>
-            </fieldset>
-            <button class="button button-primary" type="submit">
-              Start prototype run
-            </button>
-          </section>
-          <aside class="card sticky">
-            <h2>Composed prompt preview</h2>
-            <p class="muted small">
-              Updates as you change the repository or extra instructions.
-            </p>
-            <textarea id="composed-preview" class="mono preview" readOnly>
-              {initialPreview}
-            </textarea>
-          </aside>
+            <label>
+              Runner
+              <select name="runner">
+                <option value="codex">Codex</option>
+                <option value="echo">Echo (test)</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Session title
+            <input name="title" required placeholder="Improve the settings workflow" />
+          </label>
+          <label>
+            Task for the agent
+            <textarea
+              name="taskPrompt"
+              required
+              placeholder="Describe the outcome you want…"
+            />
+          </label>
+          <label>
+            Parent session{" "}
+            <span class="help">
+              Optional: make this session part of an existing work tree.
+            </span>
+            <select name="parentId">
+              <option value="">No parent</option>
+              {sessions
+                .filter(({ status }) => status !== "archived")
+                .map((session) => (
+                  <option value={session.id}>{session.title}</option>
+                ))}
+            </select>
+          </label>
+          <fieldset>
+            <legend>After the run</legend>
+            <div class="check-row">
+              <label class="check">
+                <input
+                  id="create-pr"
+                  type="checkbox"
+                  name="createPr"
+                  value="yes"
+                  checked
+                />{" "}
+                Create a pull request
+              </label>
+              <label class="check">
+                <input id="auto-merge" type="checkbox" name="autoMerge" value="yes" />{" "}
+                Auto-merge when CI passes
+              </label>
+            </div>
+          </fieldset>
+          <button class="button button-primary" type="submit">
+            Start prototype run
+          </button>
         </form>
       )}
     </Layout>
@@ -153,7 +126,7 @@ export function SessionDetailPage({
       refreshSeconds={canCancel ? 1 : undefined}
     >
       <div class="breadcrumb">
-        <a href="/">Dashboard</a>
+        <a href="/sessions">Sessions</a>
         <span>/</span>
         {breadcrumb.map((item, index) => (
           <>
@@ -259,17 +232,27 @@ export function SessionDetailPage({
             )}
             {session.autoMerge && <p class="muted small">Auto-merge is enabled.</p>}
           </section>
-          <section class="card">
-            <h2>What the agent saw</h2>
-            <details>
-              <summary>Show composed system prompt</summary>
-              <pre class="log">
-                {session.composedSystemPrompt || "No system prompt was composed."}
-              </pre>
-            </details>
-          </section>
         </aside>
       </div>
+    </Layout>
+  );
+}
+
+export function SessionsPage({
+  repos,
+  sessions,
+}: {
+  repos: Repo[];
+  sessions: Session[];
+}) {
+  return (
+    <Layout title="Sessions" section="sessions">
+      <div class="page-header">
+        <div>
+          <h1>Sessions</h1>
+        </div>
+      </div>
+      <SessionCards sessions={sessions} repos={repos} />
     </Layout>
   );
 }

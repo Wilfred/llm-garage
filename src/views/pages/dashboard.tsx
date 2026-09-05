@@ -21,16 +21,8 @@ export function DashboardPage({
     <Layout title="Dashboard" section="dashboard">
       <div class="page-header">
         <div>
-          <div class="eyebrow">Workshop overview</div>
-          <h1>Your agent sessions</h1>
-          <p>
-            Keep several pieces of work moving, then pick up the ones waiting for a
-            decision.
-          </p>
+          <h1>Dashboard</h1>
         </div>
-        <a class="button button-primary" href="/sessions/new">
-          Start a session
-        </a>
       </div>
       <section class="dashboard-section">
         <div class="section-heading">

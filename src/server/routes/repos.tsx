@@ -45,7 +45,7 @@ export function createReposRouter(store: DataStore): Router {
       result === "deleted"
         ? "Deleted repository."
         : result === "in_use"
-          ? "That repository is used by a prompt or session and cannot be deleted yet."
+          ? "That repository is used by a session and cannot be deleted yet."
           : "Repository not found.";
     res.redirect(303, noticeUrl("/repos", notice));
   });

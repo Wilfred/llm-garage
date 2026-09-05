@@ -27,8 +27,8 @@ test("creates a WAL database and persists settings across restarts", async (t) =
   assert.equal(journalMode[0]?.journal_mode, "wal");
 
   await dataSource.getRepository(Setting).save({
-    key: "basePromptId",
-    value: "prompt-1",
+    key: "defaultMergeMethod",
+    value: "squash",
   });
   await stat(path.join(dataDir, databaseFilename));
   await dataSource.destroy();
@@ -38,6 +38,6 @@ test("creates a WAL database and persists settings across restarts", async (t) =
 
   const setting = await dataSource
     .getRepository(Setting)
-    .findOneByOrFail({ key: "basePromptId" });
-  assert.equal(setting.value, "prompt-1");
+    .findOneByOrFail({ key: "defaultMergeMethod" });
+  assert.equal(setting.value, "squash");
 });

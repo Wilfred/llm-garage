@@ -12,8 +12,7 @@ Wilfred wants a personal, self-hosted web app he can hand a prompt + a GitHub re
 runs a coding agent in an isolated Docker sandbox that iterates on the code, then
 optionally opens a PR and optionally auto-merges it when CI is green. Core goals:
 
-1. A tool he can **tailor to his own workflows over time**, especially via an editable,
-   versioned library of system prompts.
+1. A focused interface for starting, monitoring, and reviewing coding-agent work.
 2. **Sessions as first-class objects, running concurrently**: agent runs form a tree,
    and multiple sessions are active at once (not a one-at-a-time queue). An agent can
    spawn subagent sessions and end itself, leaving individual sessions awaiting human
@@ -88,12 +87,12 @@ data/                         # sqlite file (gitignored)
 src/
   config.ts                   # zod-parsed env
   db/data-source.ts
-  entities/                   # Setting, Repo, SystemPrompt, PromptVersion, Session, Turn, RunEvent
+  entities/                   # Setting, Repo, Session, Turn, RunEvent
   store/types.ts              # DataStore interface (the seam views depend on)
   store/memory.ts             # in-memory fixtures impl (M3 prototype; deleted later)
   store/db.ts                 # TypeORM-backed impl (M4+)
   server/index.ts             # bootstrap: init DB, mount routes, listen
-  server/routes/              # health.ts, pages.tsx, repos.ts, prompts.ts, sessions.ts, sse.ts, agent-api.ts
+  server/routes/              # health.ts, pages.tsx, repos.ts, sessions.ts, sse.ts, agent-api.ts
   views/                      # layout.tsx + pages/*.tsx (Preact SSR)
   runner/types.ts             # Runner interface
   runner/echo.ts              # trivial test runner (no LLM)
@@ -111,16 +110,10 @@ it into `Session` + `Turn`. Design Phase 1 columns so the rename is mechanical.
 
 ### Phase 1 entities
 
-- **Setting** — KV rows (`key` primary text, `value` text). E.g. `basePromptId`,
-  `defaultMergeMethod`.
+- **Setting** — KV rows (`key` primary text, `value` text). E.g. `defaultMergeMethod`.
 - **Repo** — `id`, `owner`, `name`, `defaultBranch`, `createdAt`. Clone URL is derived
   (`https://github.com/{owner}/{name}.git`); never stored with a token.
-- **SystemPrompt** — `id`, `name`, `scope: "global" | "repo"`, `repoId?`, `createdAt`.
-- **PromptVersion** — append-only: `id`, `promptId`, `content` (text), `note?`,
-  `createdAt`. Editing a prompt inserts a new version; "current" = latest. This gives
-  tailoring-over-time history for free.
-- **Run** — `id`, `repoId`, `taskPrompt`, `composedSystemPrompt` (**frozen snapshot at
-  enqueue** so runs stay reproducible after prompt edits), `status`, `branchName`,
+- **Run** — `id`, `repoId`, `taskPrompt`, `status`, `branchName`,
   `createPr` (bool), `autoMerge` (bool), `mergeMethod` (`squash|merge|rebase`),
   `prNumber?`, `prUrl?`, `containerId?`, `error?`, `createdAt/startedAt/finishedAt`.
   - Status machine: `queued → running → (succeeded | failed | cancelled)`; if
@@ -140,7 +133,7 @@ it into `Session` + `Turn`. Design Phase 1 columns so the rename is mechanical.
   volume `llm-garage-ws-<id>` that persists between turns), PR fields, timestamps.
 - **Turn** — one agent invocation within a session: `id`, `sessionId`, `kind:
   "initial" | "feedback" | "spawn"`, `prompt` (the task or the human's feedback),
-  `composedSystemPrompt` snapshot, `status`, `containerId?`, `error?`, timestamps.
+  `status`, `containerId?`, `error?`, timestamps.
 - **RunEvent** — re-keyed to `turnId`.
 
 Migration note: `Run` ≈ `Session with exactly one Turn`. With `synchronize: true` and
@@ -219,7 +212,7 @@ interface Runner {
     exec: (cmd: string[], env: Record<string, string>) => ExecStream; // bound to the turn's container
     workdir: string;
     taskPrompt: string;
-    systemPrompt: string;
+    instructions: string;                  // harness-generated runner guidance
     resume: boolean;                     // M12: continue in an existing workspace
     onEvent: (e: RunnerEvent) => void;   // log lines / progress
     signal: AbortSignal;                 // cancellation/timeout
@@ -227,9 +220,9 @@ interface Runner {
 }
 ```
 
-- **EchoRunner** (M6): ignores the LLM entirely — writes a marker file, echoes the
-  prompts, exits 0. Exists so the whole pipeline is verifiable without codex/API keys.
-- **CodexRunner** (M7): writes the composed system prompt to `/work/AGENTS.md` (codex
+- **EchoRunner** (M6): ignores the LLM entirely — writes a marker file, echoes the task,
+  exits 0. Exists so the whole pipeline is verifiable without codex/API keys.
+- **CodexRunner** (M7): writes generated harness instructions to `/work/AGENTS.md` (codex
   reads it natively; delete it before push so it is never committed), invokes roughly
   `codex exec --json --sandbox danger-full-access -C /work "<task>"` (Docker is the
   sandbox; codex's own Landlock sandbox off — it often fails in containers anyway),
@@ -250,14 +243,6 @@ interface Runner {
   `merge_failed` with the reason as a RunEvent. Deadline 2h → `merge_failed(timeout)`.
   Zero-check repos: treat "no check runs after 3 polls + combined status success/none"
   as green. Pollers are rebuilt from DB state on server restart.
-
-## Prompt composition & tailoring
-
-At enqueue: global base prompt (Setting `basePromptId`) + repo-scoped prompt(s) +
-per-run textarea, joined with `## <section>` headers → snapshot into
-`composedSystemPrompt`, shown read-only on the session page ("what the agent actually
-saw"). `/prompts` UI: list, create, edit (= append new version), per-prompt version
-history; later: version diffs (`diff` npm package), "clone prompt from run".
 
 ## Sessions & the agent session-control tool (Phase 2)
 
@@ -301,7 +286,7 @@ engine-agnostic — any runner that can shell out can use it.
   - `GET  /api/agent/sessions` — list sessions in the caller's tree: id, title, status,
     parentId, last-turn summary.
   - `GET  /api/agent/sessions/:id` — one session: metadata + recent transcript events.
-  - `POST /api/agent/sessions` — spawn a child: `{title, taskPrompt, systemPromptExtra?}`.
+  - `POST /api/agent/sessions` — spawn a child: `{title, taskPrompt}`.
     Child is created `queued` with `parentId = caller`, same repo, fresh workspace
     (branched from the parent's branch). Returns the child id.
   - `POST /api/agent/sessions/:id/archive` — archive a session in the caller's tree.
@@ -311,9 +296,8 @@ engine-agnostic — any runner that can shell out can use it.
 - **`garage-ctl` subcommands** map 1:1: `list`, `show <id>`, `spawn --title … --prompt …`,
   `archive <id>`, `finish --status … --message …`. Output is compact JSON for the agent
   to read.
-- **Prompt wiring:** when a runner starts, the harness appends a generated "Harness
-  tools" section to the composed system prompt documenting these commands, so every
-  engine learns the tool the same way.
+- **Runner wiring:** when a runner starts, the harness includes generated instructions
+  documenting these commands, so every engine learns the tool the same way.
 - **Safety rails:** spawn depth ≤ 3, ≤ 8 live children per session, children inherit
   the queue (no fan-out past `MAX_CONCURRENT_RUNS`), tokens are tree-scoped so an agent
   can never see or archive unrelated sessions.
@@ -343,20 +327,12 @@ boundary, then remove the completed milestone from this document.
 > Implements the repos slice of `DataStore` over TypeORM (replacing fixtures); the
 > views are reused unchanged.
 
-**Build:** `Repo` entity; `/repos` list page, add form (owner, name, defaultBranch),
-delete button. Plain HTML forms, POST-redirect-GET, Preact SSR views.
+**Build:** `Repo` entity; `/repos` list page and add form (owner, name, defaultBranch).
+Plain HTML forms, POST-redirect-GET, Preact SSR views. Destructive repository management
+does not appear on the default listing.
 
-**Definition of done:** add/delete a repo in the browser; data survives restart;
-`npm run lint` clean.
-
-### M5 — Prompt library with versioning
-
-**Build:** `SystemPrompt` + `PromptVersion` entities; `/prompts` list/create; edit page
-that appends a new version; version history page; settings page selecting the global
-base prompt (Setting row).
-
-**Definition of done:** create a prompt, edit it twice → history shows 3 versions with
-timestamps; set it as base prompt; all survives restart.
+**Definition of done:** add a repo in the browser; data survives restart; `npm run lint`
+clean.
 
 ### M6 — Run pipeline with EchoRunner (no LLM, no GitHub writes)
 
@@ -409,7 +385,7 @@ with a final `git add -A && git commit` fallback by the manager if the runner le
 uncommitted changes.
 
 **Definition of done (Docker host):** codex run with `createPr` on → PR appears on
-GitHub with prompt-derived title/body; `git log`/`git config -l` in the PR branch show
+GitHub with task-derived title/body; `git log`/`git config -l` in the PR branch show
 **no token anywhere**; run with toggle off stops at `succeeded` and pushes nothing.
 
 ### M10 — CI polling + auto-merge
@@ -423,15 +399,13 @@ Action → run auto-merges (squash) and ends `merged`; add an always-failing act
 `merge_failed` with the failing check named in a RunEvent; restart the server while a
 run is `awaiting_checks` → it still merges.
 
-### M11 — Tailoring polish
+### M11 — Run UX and access polish
 
-**Build:** composed-prompt preview on the new-run form (shows global+repo+extra
-sections); read-only composed prompt on the run page; "re-run with edits" (prefills a
-new-run form from an old run); recent-runs dashboard on `/`; prompt version diff view;
-optional basic-auth middleware behind env.
+**Build:** "re-run with edits" (prefills a new-run form from an old run); recent-runs
+dashboard on `/`; optional basic-auth middleware behind env.
 
-**Definition of done:** dogfood loop — edit a repo prompt, preview composition, run,
-inspect what the agent saw, re-run with edits; diff view shows prompt changes.
+**Definition of done:** inspect a completed run and re-run it with an edited task;
+optional basic auth protects the UI when configured.
 
 ### M12 — Sessions & turns (tree + human feedback loop)
 
@@ -459,7 +433,7 @@ same session at once.
 turn end); `sandbox/garage-ctl.mjs` (fetch-based, subcommands `list/show/spawn/archive/
 finish`, reads `GARAGE_API_URL` + `GARAGE_SESSION_TOKEN`) baked into the sandbox image;
 `--add-host=garage.host:host-gateway` on sandbox containers + harness listening on the
-bridge; auto-appended "Harness tools" section in the composed system prompt; spawn
+bridge; generated "Harness tools" runner instructions; spawn
 limits (depth ≤ 3, ≤ 8 live children); children appear in the tree UI as they spawn.
 
 **Definition of done (Docker host):** give a parent session a prompt like "split this
