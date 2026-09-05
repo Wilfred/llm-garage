@@ -409,10 +409,12 @@ export class MemoryDataStore implements DataStore {
       status,
       modelId:
         id === "session-docs"
-          ? "google/gemini-3.1-pro-preview"
+          ? "z-ai/glm-5.2"
           : id === "session-parser"
-            ? "anthropic/claude-sonnet-4.5"
-            : "openai/gpt-5.2",
+            ? "moonshotai/kimi-k3"
+            : id === "session-tests"
+              ? "anthropic/claude-opus-5"
+              : "openai/gpt-5.6-sol",
       taskPrompt: title,
       createPr: id !== "session-parser",
       autoMerge: id === "session-tests",
