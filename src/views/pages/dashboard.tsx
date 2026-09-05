@@ -23,7 +23,7 @@ export function DashboardPage({
     .slice(0, 6);
 
   return (
-    <Layout title="Dashboard" section="dashboard">
+    <Layout title="Dashboard">
       <div class="page-header">
         <div>
           <h1>Dashboard</h1>

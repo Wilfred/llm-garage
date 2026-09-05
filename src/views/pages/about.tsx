@@ -44,7 +44,7 @@ export function AboutPage({
   const shortCommit = gitCommit?.slice(0, 12);
 
   return (
-    <Layout title="About" section="about">
+    <Layout title="About">
       <h1>About</h1>
       <p>Build and runtime information for this LLM Garage instance.</p>
       <dl class="system-info">

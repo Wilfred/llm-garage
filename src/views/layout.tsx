@@ -1,16 +1,14 @@
 import type { ComponentChildren } from "preact";
 
-export type NavigationSection = "dashboard" | "repos" | "sessions" | "about";
+export type NavigationSection = "repos" | "sessions";
 
 const navItems: Array<{
   href: string;
   label: string;
   section: NavigationSection;
 }> = [
-  { href: "/", label: "Dashboard", section: "dashboard" },
   { href: "/repos", label: "Repositories", section: "repos" },
   { href: "/sessions", label: "Sessions", section: "sessions" },
-  { href: "/about", label: "About", section: "about" },
 ];
 
 export function Layout({
@@ -62,7 +60,11 @@ export function Layout({
         </header>
         <main>{children}</main>
         <footer>
-          Prototype data is held in memory and resets when the server restarts.
+          <a href="/about">About</a>
+          <span>
+            Prototype data is held in memory and resets when the server
+            restarts.
+          </span>
         </footer>
       </body>
     </html>
@@ -104,7 +106,7 @@ const styles = `
   nav a:hover, nav a[aria-current="page"] { color: var(--text); background: var(--surface-raised); text-decoration: none; }
   .header-action { margin-left: auto; }
   main { width: min(1180px, 90vw); margin: 0 auto; padding: 3rem 0 5rem; }
-  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; padding: 1.2rem 5vw 2rem; }
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; padding: 1.2rem 5vw 2rem; display: flex; gap: 1.2rem; flex-wrap: wrap; }
   h1, h2, h3 { line-height: 1.15; letter-spacing: -.025em; margin-top: 0; }
   h1 { font-size: clamp(2rem, 5vw, 3.1rem); margin-bottom: .65rem; }
   h2 { font-size: 1.25rem; }

@@ -30,8 +30,8 @@ test("renders build and runtime information", () => {
   assert.match(html, /2 days, 3 hours/);
 });
 
-test("links to the about page from the dashboard", () => {
+test("links to the about page from the footer", () => {
   const html = renderPage(<DashboardPage repos={[]} sessions={[]} />);
 
-  assert.match(html, /href="\/about"/);
+  assert.match(html, /<footer><a href="\/about">About<\/a>/);
 });
