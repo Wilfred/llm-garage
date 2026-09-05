@@ -49,7 +49,7 @@ Browser ── HTTP/SSE ──> Express app (this repo, runs in Docker)
                            ├── TypeORM/SQLite (data/app.db on a mounted volume)
                            ├── octokit ──> GitHub API (PRs, checks, merge)
                            ├── dockerode ──> Docker daemon (mounted /var/run/docker.sock)
-                           │      └── per-turn sandbox container (git + node + codex)
+                           │      └── per-turn sandbox container (git + selected runner)
                            │             └── agent calls back: garage-ctl ──> Agent API
                            └── in-process job queue (p-queue)
 ```
@@ -60,18 +60,18 @@ When the harness itself runs in Docker (production), it needs
 
 ## Technology choices
 
-| Concern | Choice | Notes |
-|---|---|---|
-| JSX | Preact + `preact-render-to-string` | Renders JSX to HTML strings with dynamic text and attributes escaped by default. No client runtime or hydration; raw HTML requires the explicit `dangerouslySetInnerHTML` escape hatch. |
-| Server | Express 5 | SSE via raw `res.write`. |
-| DB | TypeORM + `better-sqlite3`, WAL mode | `synchronize: true` is fine for this single-user tool; migrations are the documented exit ramp if the data ever becomes precious. |
-| Docker | `dockerode` | Per-`exec` env vars are the linchpin of token isolation (see sandbox section). |
-| GitHub | `octokit` (umbrella pkg) | PRs, checks, merge. |
-| Queue | `p-queue` | In-process; no Redis. **Concurrency > 1 by default** — env `MAX_CONCURRENT_RUNS` (default 3) governs how many turns run at once; effective ceiling is host RAM ÷ per-container memory. See "Concurrency & resource budgeting". |
-| Config/validation | `zod` + `dotenv` | Parsed once in `src/config.ts`. |
-| Dev runner | `tsx watch` | **Gotcha:** esbuild doesn't emit decorator metadata → every TypeORM column declares an explicit type (`@Column("text")`). Never rely on `emitDecoratorMetadata`. |
-| Lint | typescript-eslint (flat) + prettier | |
-| IDs | `nanoid` | Session/turn IDs, branch slugs, agent API tokens. |
+| Concern           | Choice                               | Notes                                                                                                                                                                                                                             |
+| ----------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JSX               | Preact + `preact-render-to-string`   | Renders JSX to HTML strings with dynamic text and attributes escaped by default. No client runtime or hydration; raw HTML requires the explicit `dangerouslySetInnerHTML` escape hatch.                                           |
+| Server            | Express 5                            | SSE via raw `res.write`.                                                                                                                                                                                                          |
+| DB                | TypeORM + `better-sqlite3`, WAL mode | M2 uses `synchronize: true` only for its initial single-table bootstrap. M4 adopts that schema without losing rows, introduces checked-in migrations and permanently switches production and development to `synchronize: false`. |
+| Docker            | `dockerode`                          | Per-`exec` env vars are the linchpin of token isolation (see sandbox section).                                                                                                                                                    |
+| GitHub            | `octokit` (umbrella pkg)             | PRs, checks, merge.                                                                                                                                                                                                               |
+| Queue             | `p-queue`                            | In-process; no Redis. **Concurrency > 1 by default** — env `MAX_CONCURRENT_TURNS` (default 3) governs how many turns run at once; effective ceiling is host RAM ÷ per-container memory. See "Concurrency & resource budgeting".   |
+| Config/validation | `zod` + `dotenv`                     | Parsed once in `src/config.ts`.                                                                                                                                                                                                   |
+| Dev runner        | `tsx watch`                          | **Gotcha:** esbuild doesn't emit decorator metadata → every TypeORM column declares an explicit type (`@Column("text")`). Never rely on `emitDecoratorMetadata`.                                                                  |
+| Lint              | typescript-eslint (flat) + prettier  |                                                                                                                                                                                                                                   |
+| IDs               | `nanoid`                             | Session/turn IDs, branch slugs, agent API tokens.                                                                                                                                                                                 |
 
 tsconfig: `jsx: "react-jsx"`, `jsxImportSource: "preact"`,
 `experimentalDecorators: true`, `module`/`moduleResolution` `nodenext`, `strict: true`,
@@ -83,89 +83,108 @@ tsconfig: `jsx: "react-jsx"`, `jsxImportSource: "preact"`,
 ```
 Dockerfile                    # multi-stage TypeScript harness app image
 .dockerignore
-sandbox/Dockerfile            # agent sandbox image: git + node + codex CLI + git-askpass + garage-ctl
+sandbox/Dockerfile            # common agent sandbox: git + node + git-askpass + garage-ctl
 data/                         # sqlite file (gitignored)
 src/
   config.ts                   # zod-parsed env
   db/data-source.ts
-  entities/                   # Setting, Repo, SystemPrompt, PromptVersion, Session, Turn, RunEvent
-  store/types.ts              # DataStore interface (the seam views depend on)
-  store/memory.ts             # in-memory fixtures impl (M3 prototype; deleted later)
-  store/db.ts                 # TypeORM-backed impl (M4+)
+  db/migrations/              # ordered, reversible schema changes (M4+)
+  entities/                   # Setting, Repo, SystemPrompt, PromptVersion, Session, Turn, TurnEvent
+  store/types.ts              # RepoStore, PromptStore, SessionStore and aggregate Stores
+  store/memory/               # in-memory fixture stores (M3; replaced one slice at a time)
+  store/db/                   # TypeORM-backed stores (M4+)
   server/index.ts             # bootstrap: init DB, mount routes, listen
   server/routes/              # health.ts, pages.tsx, repos.ts, prompts.ts, sessions.ts, sse.ts, agent-api.ts
   views/                      # layout.tsx + pages/*.tsx (Preact SSR)
+  prompts/compose.ts          # deterministic composition + versioned snapshots
   runner/types.ts             # Runner interface
   runner/echo.ts              # trivial test runner (no LLM)
   runner/codex.ts             # CodexRunner (v1)
   sandbox/docker.ts           # container/volume create/exec/stream/kill/cleanup
   sandbox/garage-ctl.mjs      # CLI copied into the sandbox image (agent session tool)
   github/client.ts pr.ts checks.ts
-  runs/queue.ts manager.ts events.ts
+  sessions/queue.ts manager.ts events.ts
 ```
 
 ## Data model
 
-Two phases. **Phase 1 (M6–M11)** uses a flat `Run` model. **Phase 2 (M12)** generalizes
-it into `Session` + `Turn`. Design Phase 1 columns so the rename is mechanical.
-
-### Phase 1 entities
+There is one durable model from the first orchestration milestone (M6). A session may
+initially contain only one turn, but it is never represented as a temporary flat
+`Run`; feedback and trees extend the same rows without a later remodel.
 
 - **Setting** — KV rows (`key` primary text, `value` text). E.g. `basePromptId`,
-  `defaultMergeMethod`.
-- **Repo** — `id`, `owner`, `name`, `defaultBranch`, `createdAt`. Clone URL is derived
-  (`https://github.com/{owner}/{name}.git`); never stored with a token.
-- **SystemPrompt** — `id`, `name`, `scope: "global" | "repo"`, `repoId?`, `createdAt`.
-- **PromptVersion** — append-only: `id`, `promptId`, `content` (text), `note?`,
-  `createdAt`. Editing a prompt inserts a new version; "current" = latest. This gives
-  tailoring-over-time history for free.
-- **Run** — `id`, `repoId`, `taskPrompt`, `composedSystemPrompt` (**frozen snapshot at
-  enqueue** so runs stay reproducible after prompt edits), `status`, `branchName`,
-  `createPr` (bool), `autoMerge` (bool), `mergeMethod` (`squash|merge|rebase`),
-  `prNumber?`, `prUrl?`, `containerId?`, `error?`, `createdAt/startedAt/finishedAt`.
-  - Status machine: `queued → running → (succeeded | failed | cancelled)`; if
-    `createPr`: `succeeded → pr_created`; if `autoMerge`:
-    `pr_created → awaiting_checks → merging → (merged | merge_failed)`.
-    One `transition(run, to)` helper validates edges and appends a status RunEvent.
-- **RunEvent** — autoincrement `id` (doubles as SSE `Last-Event-ID`), `runId`,
-  `kind: "log" | "status" | "system"`, `data` (text), `ts`. Every container log line and
-  status change lands here; SSE replays from it.
+  `defaultMergeMethod`. Values that reference another entity are validated in the
+  service transaction that writes them.
+- **Repo** — `id`, canonical `owner`, canonical `name`, `defaultBranch`, `archivedAt?`,
+  `createdAt`, `updatedAt`. Store owner/name without surrounding whitespace and compare
+  them case-insensitively; a unique index prevents duplicate `(owner, name)` entries.
+  Validate GitHub owner/name and non-empty branch syntax at the HTTP boundary and again
+  in the store. The clone URL is derived (`https://github.com/{owner}/{name}.git`) and
+  is never stored with a token. "Delete" archives a repo once prompts or sessions
+  reference it, preserving their foreign keys and history.
+- **SystemPrompt** — `id`, `name`, `scope: "global" | "repo"`, `repoId?`, `position`,
+  `currentVersionId`, `archivedAt?`, timestamps. A check constraint requires `repoId`
+  exactly when scope is `repo`; repo and current-version FKs are `RESTRICT`. Partial
+  unique indexes make active names unique case-insensitively within the global scope or
+  within one repo. `position` plus `id` gives an explicit stable composition order.
+- **PromptVersion** — append-only: `id`, `promptId`, monotonically increasing `version`,
+  `content`, `note?`, `createdAt`; unique `(promptId, version)`. Editing creates the next
+  version and advances `SystemPrompt.currentVersionId` in one transaction. Versions are
+  never updated or deleted while referenced by a turn. Archiving a prompt only removes
+  it from future composition.
+- **Session** — `id`, `parentId?` (self-FK), `rootId`, `repoId`, `title`, `runnerName`,
+  `runnerConfigSnapshot`, `status`, `branchName`, `workspaceVolume?`,
+  `runnerStateVolume?`, PR policy/result fields including a separate `deliveryStatus`,
+  `baseCommitSha?`, `resultCommitSha?`, timestamps. `repoId` is `RESTRICT` and the
+  runner selection/config are frozen when the session is created. Session statuses
+  cover `queued | running | awaiting_feedback | succeeded | failed | cancelled |
+archived`. Delivery is orthogonal: `none | pending | pr_created | awaiting_checks |
+merging | merged | merge_failed`, so a session can remain reviewable while a PR is
+  open and execution transitions never overwrite delivery state.
+- **Turn** — one runner invocation: `id`, `sessionId`, `sequence`, `kind: "initial" |
+"feedback" | "spawn"`, `prompt`, `promptSnapshot` (versioned JSON),
+  `composedSystemPrompt`, `runnerStateRef?`, `status`, `containerId?`, `summary?`,
+  `diffPatch?`, `diffStat?`, `startCommitSha?`, `resultCommitSha?`, `error?`, timestamps.
+  Unique `(sessionId, sequence)` orders turns without relying on timestamps. Turn
+  statuses are `queued | running | succeeded | failed | cancelled`. The exact prompt
+  components and runner inputs are frozen before the turn is queued; the captured diff
+  makes the review promised by the session UI durable after its container exits.
+- **TurnEvent** — autoincrement `id` (also the SSE `Last-Event-ID`), `turnId`, `kind:
+"log" | "status" | "system"`, `data`, `ts`. Every emitted log chunk and transition
+  lands here. Index `(turnId, id)` for replay; deleting a session cascades to turns and
+  events only through an explicit administrative purge, never through the normal
+  archive flow. Index session `rootId`, repo, status/delivery status and queued Turn
+  lookups used by recovery and dashboards.
 
-### Phase 2 entities (M12 — sessions & turns)
+Every schema change from M4 onward is a checked-in TypeORM migration. Application
+startup runs pending migrations before serving traffic and aborts on migration failure.
+M4 includes an adoption migration for existing M2 databases: it detects/verifies the
+existing `Setting` table, preserves its rows, creates migration metadata and adds the
+repo schema. Before applying a migration in production, copy `app.db` plus its WAL/SHM
+files while the app is stopped (or use SQLite's online backup API). CI verifies both a
+fresh database and upgrade fixtures from every previously released schema. No milestone
+plans data loss or an ad-hoc one-off conversion.
 
-- **Session** — `id`, `parentId?` (self-FK → tree), `rootId` (denormalized for cheap
-  tree queries), `repoId`, `title`, `status`
-  (`queued | running | awaiting_feedback | succeeded | failed | cancelled | archived`
-  plus the PR statuses carried over), `branchName`, `workspaceVolume?` (docker named
-  volume `llm-garage-ws-<id>` that persists between turns), PR fields, timestamps.
-- **Turn** — one agent invocation within a session: `id`, `sessionId`, `kind:
-  "initial" | "feedback" | "spawn"`, `prompt` (the task or the human's feedback),
-  `composedSystemPrompt` snapshot, `status`, `containerId?`, `error?`, timestamps.
-- **RunEvent** — re-keyed to `turnId`.
+## Session orchestration
 
-Migration note: `Run` ≈ `Session with exactly one Turn`. With `synchronize: true` and
-cheap data, it is acceptable to write a small one-off script (or accept data loss) at
-the M12 boundary — decide when you get there.
-
-## Run orchestration (Phase 1)
-
-- `runs/queue.ts`: p-queue with `concurrency = MAX_CONCURRENT_RUNS` (default 3) — up to
-  N turns execute simultaneously, each in its own container/workspace/branch, so they
-  never collide. Enqueue persists Run as `queued`. On startup: re-enqueue `queued`
-  runs, mark orphaned `running` runs `failed`, sweep leftover containers by label
-  (`llm-garage=1`).
-- `runs/manager.ts` — `executeRun(runId)`: transition `running` → create container →
-  exec clone (token env on this exec only, `git checkout -b <branch>`) → exec runner
-  (streaming) → exec push if changes and `createPr` → PR/CI phases →
-  `container.remove({force: true, v: true})` in `finally`.
-- `runs/events.ts`: per-run EventEmitter; each event is (a) inserted as RunEvent,
-  (b) broadcast to SSE subscribers. **Redact `GITHUB_TOKEN` / `OPENAI_API_KEY` values
-  from log lines before persistence.**
-- SSE `GET /runs/:id/events`: replay RunEvents past `Last-Event-ID`, then live;
-  heartbeat comment every 25s; close on terminal status. Client is ~20 lines of vanilla
-  `EventSource` appending to a `<pre>` — the only client JS in the app.
-- Cancellation: `POST /runs/:id/cancel` → force-remove container → `cancelled`.
-- Timeout: manager-side timer (env `RUN_TIMEOUT_MINUTES`, default 30) → kill → `failed`.
+- `sessions/queue.ts`: p-queue with `concurrency = MAX_CONCURRENT_TURNS` (default 3) —
+  up to N turns execute simultaneously. Creation transactionally persists a Session,
+  its first queued Turn and its prompt snapshot before enqueueing work. On startup,
+  re-enqueue queued turns, reconcile running turns against labeled containers, and
+  sweep only resources that cannot be matched to a durable nonterminal turn.
+- `sessions/manager.ts` — `executeTurn(turnId)`: compare-and-set `queued → running` →
+  create/reuse the session workspace → create a fresh container → clone/checkout on
+  the first turn → invoke the runner → capture diff/commit metadata → update turn
+  and session state. Later PR/CI milestones operate on the Session. A transaction
+  records each state change with its TurnEvent; external side effects are reconciled
+  idempotently after restart.
+- `sessions/events.ts`: per-turn EventEmitter; each event is (a) redacted and inserted
+  as a TurnEvent, then (b) broadcast to subscribers. Redaction covers all configured
+  runner credentials and the GitHub token, not only provider-specific variable names.
+- SSE `GET /sessions/:sessionId/turns/:turnId/events`: replay TurnEvents past
+  `Last-Event-ID`, then live; heartbeat every 25s; close on terminal turn status.
+- Cancellation: `POST /sessions/:id/cancel` aborts the active turn, force-removes its
+  container and records `cancelled`. Timeout uses `TURN_TIMEOUT_MINUTES` (default 30).
 
 ### Concurrency & resource budgeting
 
@@ -173,7 +192,7 @@ Multiple active sessions is a first-class requirement, so the queue runs several
 at once. The consequences to design for:
 
 - **Host memory is the real limit.** Each turn is a container capped at `Memory: 2GB`
-  (env `SANDBOX_MEMORY_MB`). So `MAX_CONCURRENT_RUNS × SANDBOX_MEMORY_MB` must fit in
+  (env `SANDBOX_MEMORY_MB`). So `MAX_CONCURRENT_TURNS × SANDBOX_MEMORY_MB` must fit in
   host RAM with headroom for the harness itself. Document this; on startup, log the
   computed budget and warn if it exceeds a configured `HOST_MEMORY_MB`. The queue — not
   the number of sessions — is the throttle: you can have 50 sessions and only N running.
@@ -181,10 +200,10 @@ at once. The consequences to design for:
   better-sqlite3 connection, which serializes queries in-process — concurrent turns
   never produce `SQLITE_BUSY` against each other (WAL + `busy_timeout` still set for
   safety). Because writes are synchronous and block the event loop, batch high-frequency
-  RunEvent log inserts (coalesce a container's stdout into ~250ms flushes) so N chatty
+  TurnEvent log inserts (coalesce a container's stdout into ~250ms flushes) so N chatty
   turns don't stall the server. This batching is the one concurrency-specific code
-  change; everything else (per-run EventEmitter, SSE, CI pollers, containers, branches,
-  workspaces) is already per-run and parallel-safe by construction.
+  change; everything else (per-turn EventEmitter, SSE, CI pollers, containers, branches,
+  workspaces) is already per-session or per-turn and parallel-safe by construction.
 - **GitHub API pressure**: N concurrent CI pollers share the PAT's rate limit; keep the
   45s interval and jitter poll start times so they don't align.
 - **Fairness**: p-queue is FIFO. Spawned child turns enqueue behind existing work
@@ -193,9 +212,11 @@ at once. The consequences to design for:
 
 ## Docker sandbox & token isolation
 
-`sandbox/Dockerfile`: `node:22-bookworm-slim` + git + `npm i -g @openai/codex` +
-`/usr/local/bin/git-askpass` (a 2-line sh script that prints `$GIT_TOKEN`) + `garage-ctl`
-(M13) + non-root `agent` user, workdir `/work`.
+`sandbox/Dockerfile` provides the common runtime (Node, git, git-askpass, `garage-ctl`
+from M12 and a non-root `agent` user). Runner-specific images layer their CLI and pinned
+version on top; the v1 Codex image installs `@openai/codex`. Containers mount the
+session's repository workspace at `/work` and a separate persistent, runner-private
+state directory at `/runner-state`.
 
 The sandbox container is created with **no secrets in its env**. Docker `exec` supports
 per-exec env, so:
@@ -203,8 +224,10 @@ per-exec env, so:
 - **Clone/push execs:** `GIT_ASKPASS=/usr/local/bin/git-askpass`, `GIT_TOKEN=<pat>`,
   `GIT_TERMINAL_PROMPT=0`. The remote URL is plain `https://github.com/o/r.git` — the
   token never touches `.git/config`, history, or the agent's environment.
-- **Agent exec:** `OPENAI_API_KEY` only (plus `GARAGE_SESSION_TOKEN`/`GARAGE_API_URL`
-  from M13). The agent process cannot read the GitHub token.
+- **Runner exec:** only the credentials declared by the selected Runner adapter (plus
+  `GARAGE_SESSION_TOKEN`/`GARAGE_API_URL` from M12). The process cannot read the GitHub
+  token. Credential names and redaction values come from the adapter/config registry;
+  orchestration does not special-case a provider.
 
 HostConfig limits: `Memory: 2GB`, `NanoCpus: 2e9`, `PidsLimit: 512`. Network: default
 bridge in v1 (codex and git need egress); egress filtering is a future hardening item.
@@ -214,78 +237,120 @@ All containers and volumes labeled `llm-garage=1` for reaping.
 
 ```ts
 interface Runner {
-  name: string;
+  descriptor: {
+    name: string;
+    version: string;
+    capabilities: {
+      continuation: "native" | "context" | "none";
+      structuredEvents: boolean;
+    };
+  };
   run(ctx: {
-    exec: (cmd: string[], env: Record<string, string>) => ExecStream; // bound to the turn's container
+    // Bound to the turn's container.
+    exec: (cmd: string[], env: Record<string, string>) => ExecStream;
     workdir: string;
+    stateDir: string; // persistent, opaque to the harness
     taskPrompt: string;
     systemPrompt: string;
-    resume: boolean;                     // M12: continue in an existing workspace
-    onEvent: (e: RunnerEvent) => void;   // log lines / progress
-    signal: AbortSignal;                 // cancellation/timeout
-  }): Promise<{ status: "succeeded" | "failed"; summary?: string }>;
+    continuation?: {
+      previousTurnId: string;
+      priorSummaries: string[];
+      opaqueStateRef?: string;
+    };
+    onEvent: (e: RunnerEvent) => void; // logs / normalized progress
+    signal: AbortSignal; // cancellation/timeout
+  }): Promise<{
+    status: "succeeded" | "failed";
+    summary?: string;
+    opaqueStateRef?: string;
+  }>;
 }
 ```
 
-- **EchoRunner** (M6): ignores the LLM entirely — writes a marker file, echoes the
-  prompts, exits 0. Exists so the whole pipeline is verifiable without codex/API keys.
-- **CodexRunner** (M7): writes the composed system prompt to `/work/AGENTS.md` (codex
-  reads it natively; delete it before push so it is never committed), invokes roughly
-  `codex exec --json --sandbox danger-full-access -C /work "<task>"` (Docker is the
-  sandbox; codex's own Landlock sandbox off — it often fails in containers anyway),
-  parses the `--json` JSONL stream into RunnerEvents. For resume (M12):
-  `codex exec resume --last` in the same workspace. **The codex CLI churns — verify
-  current flag names against the installed version before wiring anything.**
+The harness owns workspace lifecycle, prompt snapshots, events, cancellation and
+credentials. Each adapter owns its CLI invocation and everything under `/runner-state`;
+the harness persists only the adapter's optional opaque reference and never assumes a
+provider's on-disk convention. The selected runner name, adapter version, non-secret
+config and advertised capabilities are recorded with the session/turn. A native-resume
+adapter consumes its opaque state; a context-resume adapter receives prior summaries;
+an adapter with neither capability still gets the persistent repository workspace.
+
+- **EchoRunner** (M6): ignores the LLM, writes a marker file, echoes the prompt, and
+  advertises context continuation. It verifies the pipeline without provider keys.
+- **CodexRunner** (M7) is one adapter implementation. It pins and verifies the Codex CLI,
+  maps its structured output to RunnerEvents and keeps any native continuation metadata
+  under `/runner-state`. It passes the composed system prompt through an adapter-owned
+  invocation/config mechanism outside `/work`; it must never replace or delete a
+  repository's own instruction files. Exact flags and state handling are established by
+  a throwaway-container spike against the pinned version, not encoded into the generic
+  session contract.
 
 ## GitHub flow
 
 - Fine-grained PAT scoped to the target repos: Contents RW, Pull requests RW,
   Checks/Statuses R.
-- Branch naming: `llm-garage/run-{id}-{slug(taskPrompt, 30)}`.
+- Branch naming: `llm-garage/session-{id}-{slug(initialPrompt, 30)}`.
 - PR: `octokit.rest.pulls.create({ base: defaultBranch, head, title, body })`; body
   includes the task prompt + a link back to the local session page.
-- **CI watching: polling, not webhooks** (self-hosted, possibly behind NAT). Per run in
-  `awaiting_checks`, poll every 45s: `checks.listForRef` + combined status for the head
-  SHA. All green → `pulls.merge({ merge_method })` → `merged`. Any failure/conflict →
-  `merge_failed` with the reason as a RunEvent. Deadline 2h → `merge_failed(timeout)`.
-  Zero-check repos: treat "no check runs after 3 polls + combined status success/none"
-  as green. Pollers are rebuilt from DB state on server restart.
+- **CI watching: polling, not webhooks** (self-hosted, possibly behind NAT). For each
+  session whose `deliveryStatus` is `awaiting_checks`, poll every 45s:
+  `checks.listForRef` + combined status for the head SHA. All green →
+  `pulls.merge({ merge_method })` → `merged`. Any failure/conflict → `merge_failed`
+  with the reason as a TurnEvent. Deadline 2h → `merge_failed(timeout)`.
+  Expected checks come from repo policy. Missing checks remain pending/fail at the
+  deadline unless that repo explicitly allows no CI. Pollers are rebuilt from DB state
+  on server restart.
 
 ## Prompt composition & tailoring
 
-At enqueue: global base prompt (Setting `basePromptId`) + repo-scoped prompt(s) +
-per-run textarea, joined with `## <section>` headers → snapshot into
-`composedSystemPrompt`, shown read-only on the session page ("what the agent actually
-saw"). `/prompts` UI: list, create, edit (= append new version), per-prompt version
-history; later: version diffs (`diff` npm package), "clone prompt from run".
+Prompt composition is a pure, versioned function. In the transaction that creates a
+turn, resolve and lock these components in order:
 
-## Sessions & the agent session-control tool (Phase 2)
+1. the current version of the configured global base prompt, if any;
+2. active repo prompts ordered by `(position, id)`;
+3. optional turn-specific system-prompt additions;
+4. generated harness-tool instructions, when that capability is enabled.
+
+The composer emits both `composedSystemPrompt` and a canonically serialized
+`promptSnapshot` JSON document with a schema version, composer version, the separate
+task/feedback prompt, and each ordered system component's kind/label, prompt ID,
+PromptVersion ID/version, SHA-256 content hash and exact content. Include a SHA-256 of
+the final rendered system prompt too. Prompt selection, snapshot insertion and queued
+Turn creation are one transaction, so an edit racing with enqueue can produce either
+complete version but never a mixture. Preview calls the same composer with an explicit set of version IDs;
+the submit endpoint recomputes and displays any changed result rather than trusting
+hidden browser content. The session page shows the immutable snapshot ("what the runner
+actually saw"). `/prompts` offers append-only edit/history; later polish adds version
+diffs and "clone prompt from turn".
+
+## Sessions & the agent session-control tool
 
 The end state the user wants: an agent can **decompose work into subagent sessions and
 get out of the way** — spawn children, end itself, and let the human iterate on each
 child session individually.
 
-### Session semantics (M12)
+### Session semantics (M6 onward)
 
-- Sessions form a tree (`parentId`). The UI shows the tree, an **"active" list** (all
-  sessions whose current turn is `running` or `queued`), and an **"awaiting feedback"
-  inbox**. Multiple sessions are active at once, bounded by `MAX_CONCURRENT_RUNS`.
+- The schema supports a tree (`parentId`); M12 enables child creation and its tree UI.
+  From M6, the dashboard shows an **"active" list** (sessions whose current turn is
+  `running` or `queued`) and an **"awaiting feedback" inbox**. Multiple sessions are
+  active at once, bounded by `MAX_CONCURRENT_TURNS`.
 - A session's workspace is a named docker volume that persists across turns; each turn
   runs in a fresh container with that volume mounted at `/work`. Because every session
   has its own volume, branch, and container, concurrent sessions are fully isolated —
   no extra locking needed.
 - **Per-session turn serialization:** a single session runs at most one turn at a time
-  (a feedback turn can't start until the prior turn ends), but *different* sessions run
+  (a feedback turn can't start until the prior turn ends), but _different_ sessions run
   concurrently. The queue enforces both: one in-flight turn per session, ≤ N in-flight
   turns overall.
 - **Human feedback loop:** a session that finishes a turn goes to `awaiting_feedback`
   (unless archived/failed). The human opens it, reads the transcript/diff, and either
-  (a) sends feedback → new `feedback` Turn resuming in the same workspace, (b) triggers
-  push/PR, or (c) archives it.
+  (a) sends feedback → new `feedback` Turn in the same workspace, (b) completes it,
+  triggering configured PR delivery, or (c) archives it.
 - **Archive:** terminal. Sets status `archived`, force-removes any container, deletes
-  the workspace volume, keeps transcript rows for history.
+  workspace and runner-state volumes, and keeps transcript rows for history.
 
-### Agent API + `garage-ctl` (M13)
+### Agent API + `garage-ctl` (M12)
 
 The agent controls sessions through a tiny CLI (`garage-ctl`, a single-file Node script
 baked into the sandbox image) that talks HTTP to the harness. CLI-over-HTTP is
@@ -302,8 +367,11 @@ engine-agnostic — any runner that can shell out can use it.
     parentId, last-turn summary.
   - `GET  /api/agent/sessions/:id` — one session: metadata + recent transcript events.
   - `POST /api/agent/sessions` — spawn a child: `{title, taskPrompt, systemPromptExtra?}`.
-    Child is created `queued` with `parentId = caller`, same repo, fresh workspace
-    (branched from the parent's branch). Returns the child id.
+    While the request blocks, create a filesystem-consistent repository checkpoint of
+    the caller's current workspace (including tracked and untracked changes, excluding
+    runner-private state), record its commit/hash as the child's provenance, seed a new
+    workspace volume from that immutable checkpoint, and create the child's branch.
+    Then persist the child Session + initial Turn as `queued`. Returns the child id.
   - `POST /api/agent/sessions/:id/archive` — archive a session in the caller's tree.
   - `POST /api/agent/self/finish` — end the caller's own turn:
     `{status: "awaiting_feedback" | "succeeded", messageForHuman}`. This is how a parent
@@ -311,11 +379,11 @@ engine-agnostic — any runner that can shell out can use it.
 - **`garage-ctl` subcommands** map 1:1: `list`, `show <id>`, `spawn --title … --prompt …`,
   `archive <id>`, `finish --status … --message …`. Output is compact JSON for the agent
   to read.
-- **Prompt wiring:** when a runner starts, the harness appends a generated "Harness
-  tools" section to the composed system prompt documenting these commands, so every
-  engine learns the tool the same way.
+- **Prompt wiring:** when creating a tool-enabled turn, the harness appends a generated
+  "Harness tools" component before freezing the prompt snapshot, so every engine learns
+  the tool the same way and the exact generated instructions remain auditable.
 - **Safety rails:** spawn depth ≤ 3, ≤ 8 live children per session, children inherit
-  the queue (no fan-out past `MAX_CONCURRENT_RUNS`), tokens are tree-scoped so an agent
+  the queue (no fan-out past `MAX_CONCURRENT_TURNS`), tokens are tree-scoped so an agent
   can never see or archive unrelated sessions.
 
 ## Security
@@ -338,165 +406,180 @@ Each milestone lists **Build** and **Definition of done** (verification). Do not
 milestone N+1 until N's definition of done has been demonstrated. Commit + push at each
 boundary, then remove the completed milestone from this document.
 
-### M4 — Repos CRUD
+### M4 — Durable persistence foundation + repos
 
-> Implements the repos slice of `DataStore` over TypeORM (replacing fixtures); the
-> views are reused unchanged.
+> Replaces only the repos slice of the M3 stores; prompt and session fixtures remain
+> explicitly in memory until M5 and M6.
 
-**Build:** `Repo` entity; `/repos` list page, add form (owner, name, defaultBranch),
-delete button. Plain HTML forms, POST-redirect-GET, Preact SSR views.
+**Build:** add migration commands and an M2 adoption migration, switch
+`synchronize: false`, and run migrations before listening. Add the constrained `Repo`
+schema described above and a TypeORM `RepoStore`; wire it into the mixed `Stores`
+aggregate. `/repos` supports list/add/edit/archive. Normalize and validate owner/name,
+reject case-insensitive duplicates, and derive clone URLs without credentials. Do not
+hard-delete rows: archive hides them from new-session choices while preserving durable
+references added by later milestones.
 
-**Definition of done:** add/delete a repo in the browser; data survives restart;
-`npm run lint` clean.
+**Definition of done:** a fresh database and a copy of an M2 database both migrate
+without losing `Setting` rows; migration up/down tests pass; duplicate/case-variant
+repos are rejected; edit/archive through the browser survives restart; `synchronize`
+is false in every non-test configuration; lint and tests are clean.
 
-### M5 — Prompt library with versioning
+### M5 — Durable prompt library + deterministic composition
 
-**Build:** `SystemPrompt` + `PromptVersion` entities; `/prompts` list/create; edit page
-that appends a new version; version history page; settings page selecting the global
-base prompt (Setting row).
+**Build:** migrations for constrained `SystemPrompt` and append-only `PromptVersion`;
+a transactional TypeORM `PromptStore`; `/prompts` list/create/archive, append-version
+edit and immutable history; and a validated global-base setting. Implement the pure,
+versioned composer and prompt-snapshot schema described above. A prompt creation/edit
+transaction assigns the next per-prompt version and advances `currentVersionId`;
+normal UI operations never mutate or delete PromptVersion rows. Replace only the
+prompt slice in `Stores`.
 
-**Definition of done:** create a prompt, edit it twice → history shows 3 versions with
-timestamps; set it as base prompt; all survives restart.
+**Definition of done:** create a prompt and edit it twice → versions 1/2/3 remain
+readable with stable IDs and timestamps; invalid scope/repo combinations and duplicate
+names fail cleanly; set a global base, order two repo prompts, and prove repeated
+composition yields byte-identical output/snapshot; an old explicit-version snapshot is
+unchanged after further edits; all data survives restart and fresh/upgrade migration
+tests pass.
 
-### M6 — Run pipeline with EchoRunner (no LLM, no GitHub writes)
+### M6 — Durable session/turn pipeline with EchoRunner
 
-**Build:** `sandbox/Dockerfile` + `npm run sandbox:build`; `sandbox/docker.ts`
-(dockerode: create/exec-with-env/stream/kill, labels, volume-less v1); `Run` +
-`RunEvent` entities + `transition()`; `runs/queue.ts`, `runs/manager.ts`,
-`runs/events.ts` with log redaction; **EchoRunner**; new-run form (repo, task prompt)
-+ run detail page rendering persisted RunEvents on refresh (no SSE yet); cancel button;
-timeout; startup sweep + orphan handling. Clone step uses the git-askpass mechanism
-(read-only use of the PAT).
+**Build:** migrations for `Session`, `Turn` and `TurnEvent` exactly as the durable core
+model—there is no intermediate `Run` entity. Add the common sandbox image and
+`sandbox/docker.ts` (create/exec-with-env/stream/kill, labels, persistent workspace and
+runner-state volumes); `sessions/queue.ts`, `manager.ts`, and `events.ts`; transactional
+state transitions; log redaction; and EchoRunner. Creating a session transactionally
+freezes runner config and prompt versions and inserts its initial queued Turn. Each turn
+uses a fresh container but the same session volumes. Wire the real `SessionStore`, the
+session detail/transcript/diff page, feedback (append a Turn), complete, cancel and
+archive actions. Enforce one active turn per session, the global concurrency bound,
+timeout, startup reconciliation and idempotent cleanup. Clone uses git-askpass with
+read-only PAT access; completing a session stops at `succeeded` with no GitHub writes.
 
-**Definition of done (on a Docker host):** create a run against a scratch repo → status
-walks `queued → running → succeeded`; run page shows clone output + echo output after
-refresh; `docker ps` shows the labeled container during and nothing after; cancel
-mid-run yields `cancelled` and no leftover container; grep the RunEvent rows for the
-PAT value → zero hits. **Concurrency check:** with `MAX_CONCURRENT_RUNS=2`, start three
-runs at once → `docker ps` shows exactly two labeled containers running and the third
-`queued`; all three finish; a fourth run started with `MAX_CONCURRENT_RUNS=1` while two
-are active stays `queued` until a slot frees.
+**Definition of done (Docker host):** create a session against a scratch repo → its
+first turn walks `queued → running → succeeded` and the Session becomes
+`awaiting_feedback`; refresh still shows prompt snapshot, events and captured diff;
+send feedback → sequence 2 runs in the same workspace and sees sequence 1's file;
+complete → Session `succeeded`; archive → both volumes disappear while rows and
+transcript remain. Cancel leaves no container. Restart re-enqueues queued work and
+reconciles an interrupted turn without duplicating it. The PAT appears in no TurnEvent.
+With `MAX_CONCURRENT_TURNS=2`, three independent sessions run exactly two at once, and
+two turns of one session never overlap.
 
-### M7 — CodexRunner
+### M7 — First production runner adapter (Codex)
 
-**Build:** spike first, in a throwaway container on the Docker host: confirm the exact
-`codex exec` invocation, JSON output flag, and API-key auth work non-interactively with
-the pinned `@openai/codex` version; then implement `runner/codex.ts` (AGENTS.md
-injection, JSONL parsing → RunnerEvents, AGENTS.md cleanup), runner selection on the
-new-run form (echo|codex), `OPENAI_API_KEY` required only when codex selected.
+**Build:** keep orchestration provider-agnostic and implement Codex only as the first
+registered Runner. Spike the pinned CLI in a throwaway container to establish its
+non-interactive invocation, structured output, credentials and continuation behavior.
+Implement `runner/codex.ts`, a runner-specific image layer and config validation; map
+output to RunnerEvents, keep private state outside `/work`, and never alter repository
+instruction files. Advertise the observed continuation capability honestly: native
+opaque state if reliable, otherwise context continuation using durable summaries.
 
-**Definition of done (Docker host):** run "add a haiku to README.md" against a scratch
-repo with codex → `succeeded`; run page shows codex's streamed activity; workspace diff
-inside the container (or a debug "show diff" exec) proves the file changed; EchoRunner
-still passes M6's checks.
+**Definition of done (Docker host):** run "add a haiku to README.md" with Codex → the
+turn succeeds and its persisted diff shows the edit; send feedback → the adapter
+continues according to its advertised capability and sees prior workspace changes;
+the session manager contains no Codex/OpenAI path, flags or state conventions; selecting
+Echo requires no Codex credentials and still passes M6's checks.
 
-### M8 — Live logs via SSE
+### M8 — Live turn logs via SSE
 
-**Build:** `sse.ts` route (replay from `Last-Event-ID`, live subscribe, 25s heartbeat,
-close on terminal status); the single `EventSource` client snippet in the run page;
-live status badge swap.
+**Build:** `sse.ts` route (TurnEvent replay from `Last-Event-ID`, live subscribe, 25s
+heartbeat, close on terminal turn status); the single `EventSource` snippet in the
+session page; live turn/session status badges.
 
-**Definition of done:** open the run page, then start the run from another tab → logs
-stream in without refresh; reload mid-run → no lost lines (replay works); two tabs
-stream simultaneously.
+**Definition of done:** open a session page, then enqueue feedback from another tab →
+logs stream without refresh; reload mid-turn → no lost/duplicate rendered events;
+two tabs and two concurrent sessions stream independently.
 
 ### M9 — Push + PR creation
 
-**Build:** push exec (askpass env, only when the workspace has commits and `createPr`
-is set); `github/client.ts` + `pr.ts`; `pr_created` state + PR link on the run page;
-`createPr` toggle on the new-run form. Commit convention: agent commits during the run,
-with a final `git add -A && git commit` fallback by the manager if the runner left
-uncommitted changes.
+**Build:** when a session is completed with `createPr`, create an idempotent checkpoint
+commit if needed, push using askpass, and create/reconcile one PR via `github/client.ts`
+and `pr.ts`. Track delivery separately from execution (`pending → pr_created`) and show
+the PR link on the session page. A retry searches by recorded head branch/PR number
+before issuing another external write. With `createPr` off, completion remains local.
 
-**Definition of done (Docker host):** codex run with `createPr` on → PR appears on
-GitHub with prompt-derived title/body; `git log`/`git config -l` in the PR branch show
-**no token anywhere**; run with toggle off stops at `succeeded` and pushes nothing.
+**Definition of done (Docker host):** complete a Codex session with `createPr` on → one
+PR appears with prompt-derived title/body and the session's final diff; restart at each
+push/PR boundary → reconciliation creates neither a duplicate branch action nor a
+second PR; `git log`/`git config -l` expose no token; toggle off pushes nothing.
 
 ### M10 — CI polling + auto-merge
 
-**Build:** `github/checks.ts` poller (45s interval, per-run, rebuilt from DB on
-startup); states `awaiting_checks/merging/merged/merge_failed`; `autoMerge` toggle +
-merge-method select on the new-run form; zero-checks rule; 2h deadline.
+**Build:** `github/checks.ts` poller (45s interval, per session, rebuilt from DB on
+startup); delivery states `awaiting_checks/merging/merged/merge_failed`; `autoMerge`
+and merge-method settings; explicit per-repo policy for whether no CI is acceptable;
+2h deadline. Compare-and-set transitions and GitHub reconciliation make retries safe.
 
-**Definition of done (Docker host):** scratch repo with a trivial always-green GitHub
-Action → run auto-merges (squash) and ends `merged`; add an always-failing action →
-`merge_failed` with the failing check named in a RunEvent; restart the server while a
-run is `awaiting_checks` → it still merges.
+**Definition of done (Docker host):** an expected always-green GitHub Action causes an
+auto-merge; a failing/missing expected check records `merge_failed` with the reason in
+a TurnEvent; a repo without expected checks merges only when its explicit no-CI policy
+allows it; restart during polling or merge converges on the real GitHub state.
 
-### M11 — Tailoring polish
+### M11 — Tailoring and review polish
 
-**Build:** composed-prompt preview on the new-run form (shows global+repo+extra
-sections); read-only composed prompt on the run page; "re-run with edits" (prefills a
-new-run form from an old run); recent-runs dashboard on `/`; prompt version diff view;
-optional basic-auth middleware behind env.
+**Build:** composed-prompt preview on the new-session form using the production
+composer; immutable per-turn component/version details on the session page; "new
+session from this turn" with explicit version choices; durable per-turn diff display;
+prompt-version diff view; recent-sessions dashboard; optional basic auth via env.
 
-**Definition of done:** dogfood loop — edit a repo prompt, preview composition, run,
-inspect what the agent saw, re-run with edits; diff view shows prompt changes.
+**Definition of done:** edit and reorder repo prompts, preview composition, run,
+inspect the exact version IDs/content hashes and diff, then create a new session pinned
+to the old versions; later prompt edits do not change either historical Turn.
 
-### M12 — Sessions & turns (tree + human feedback loop)
+### M12 — Agent-controlled session trees (`garage-ctl` + Agent API)
 
-**Build:** rename/generalize per "Phase 2 entities": `Session` (+`parentId`, `rootId`,
-`workspaceVolume`, `awaiting_feedback`/`archived` statuses) and `Turn`; per-session
-named docker volume mounted at `/work` (created on first turn, reused on later turns);
-runner `resume` flag (codex: `codex exec resume --last`); feedback form on the session
-page → new `feedback` Turn; archive action (remove volume + container, keep rows);
-session tree + **active list** + awaiting-feedback inbox on the dashboard; queue/startup
-logic updated for turns, enforcing one in-flight turn per session and ≤ N overall.
+**Build:** add `parentId`/`rootId` tree behavior to the already-durable Session model;
+tree UI, active list and awaiting-feedback inbox; `agent-api.ts` with per-turn,
+tree-scoped bearer tokens; `sandbox/garage-ctl.mjs` (`list/show/spawn/archive/finish`);
+sandbox-to-harness networking; generated harness-tools prompt component; depth/live
+child limits. Implement the immutable parent-workspace checkpoint protocol described
+above before queueing a child. `finish` records intent, requests runner cancellation,
+and lets the manager own the single terminal transition after the process exits.
 
-**Definition of done (Docker host):** start a session, let it finish →
-`awaiting_feedback`; send feedback ("also update the CHANGELOG") → second turn resumes
-in the same workspace and sees the first turn's changes; archive → volume gone
-(`docker volume ls`), transcript still readable; tree page renders parent/child.
-**Concurrency check:** start three independent sessions → the dashboard's active list
-shows up to `MAX_CONCURRENT_RUNS` running with the rest queued, each in its own volume
-(`docker volume ls` shows one `llm-garage-ws-*` per session); sending feedback to a
-session that already has a running turn is rejected/queued, never runs two turns of the
-same session at once.
-
-### M13 — Agent session-control tool (`garage-ctl` + Agent API)
-
-**Build:** `agent-api.ts` routes with per-turn bearer tokens (tree-scoped, revoked at
-turn end); `sandbox/garage-ctl.mjs` (fetch-based, subcommands `list/show/spawn/archive/
-finish`, reads `GARAGE_API_URL` + `GARAGE_SESSION_TOKEN`) baked into the sandbox image;
-`--add-host=garage.host:host-gateway` on sandbox containers + harness listening on the
-bridge; auto-appended "Harness tools" section in the composed system prompt; spawn
-limits (depth ≤ 3, ≤ 8 live children); children appear in the tree UI as they spawn.
-
-**Definition of done (Docker host):** give a parent session a prompt like "split this
-task into two subtasks, spawn a session for each, then finish yourself with a summary"
-→ two child sessions appear queued/running in the tree, the parent ends
-`awaiting_feedback` with its `messageForHuman` shown; each child can then be iterated
-via feedback independently; a forged/expired token gets 401; a child cannot archive a
-session outside its tree.
+**Definition of done (Docker host):** a parent instructed to split work spawns two
+children from an exact recorded parent checkpoint and finishes; the parent and children
+render as a tree and each child accepts independent feedback; child changes cannot race
+with later parent changes; forged/expired tokens get 401 and a child cannot affect an
+unrelated tree; restart preserves the tree, provenance, prompts and all transcripts.
 
 ---
 
 ## Risk register
 
-1. **Codex CLI flags/auth in-container** — highest uncertainty; spiked at the start of
-   M7; EchoRunner keeps the pipeline verifiable regardless.
-2. **`codex exec resume` semantics** (M12) — verify resume actually replays context in
-   the pinned codex version; fallback: prepend a transcript summary to the next turn's
-   task prompt.
-3. **Linux `host-gateway` support** (M13) — needs Docker ≥ 20.10; fallback to the
+1. **Runner CLI/auth churn** — the first Codex adapter is spiked and pinned in M7;
+   adapter-specific flags, credentials and private state stay out of orchestration, and
+   EchoRunner keeps the durable pipeline independently verifiable.
+2. **Continuation capability varies by runner** — advertise `native`, `context` or
+   `none` based on integration tests. Persist adapter state opaquely and always preserve
+   the repository workspace; never silently claim native continuation.
+3. **Linux `host-gateway` support** (M12) — needs Docker ≥ 20.10; fallback to the
    bridge gateway IP from `dockerode`'s network inspect.
-4. **tsx + decorator metadata** — mitigated by explicit column types everywhere.
-5. **`synchronize: true` drift** — acceptable; migrations documented as exit ramp; the
-   M12 remodel may drop dev data (acceptable, note it in the commit message).
-6. **Zero-CI repos in auto-merge** — "no checks after 3 polls = green" rule; revisit.
+4. **Migration/SQLite upgrade failure** — mitigated by stopping before listen, documented
+   backups, checked-in migrations, and CI upgrade fixtures from every released schema.
+5. **Repository rename/transfer** — owner/name is the v1 identity. Add a stable provider
+   repository ID before automatic rename discovery; meanwhile edits are explicit and
+   historical sessions keep their recorded repo/base-commit provenance.
+6. **Zero-CI repos in auto-merge** — never infer green merely from delayed/missing
+   checks; require expected checks or an explicit per-repo no-CI policy.
 7. **Open container egress in v1** — documented hardening item.
 8. **Host resource exhaustion from concurrency** — N concurrent 2GB containers can
-    OOM the host. Mitigated by the `MAX_CONCURRENT_RUNS × SANDBOX_MEMORY_MB` budget
-    check on startup and hard per-container limits; the queue caps in-flight turns
-    regardless of how many sessions exist.
+   OOM the host. Mitigated by the `MAX_CONCURRENT_TURNS × SANDBOX_MEMORY_MB` budget
+   check on startup and hard per-container limits; the queue caps in-flight turns
+   regardless of how many sessions exist.
 9. **Event-loop stalls under many chatty concurrent turns** — synchronous SQLite
-    writes × N high-log turns; mitigated by batching RunEvent inserts (~250ms flush).
+   writes × N high-log turns; mitigated by batching TurnEvent inserts (~250ms flush).
+10. **Child checkpoint consistency and disk growth** — M12 blocks spawn until an
+    immutable checkpoint is complete and records its provenance; cap live children and
+    workspace bytes, and clean both workspace and runner-state volumes on archive.
 
 ## Critical files
 
-- `src/runs/manager.ts` — run/turn lifecycle; docker/runner/github/events meet here
+- `src/sessions/manager.ts` — turn lifecycle; docker/runner/github/events meet here
 - `src/sandbox/docker.ts` — container + volume lifecycle, per-exec-env token isolation
-- `src/runner/codex.ts` — v1 Runner impl + JSONL parsing
-- `src/server/routes/agent-api.ts` — the agent's session-control surface (M13)
-- `src/entities/` — Run→Session/Turn state machines; the schema everything hangs off
+- `src/db/migrations/` — durable schema history and upgrade path
+- `src/prompts/compose.ts` — deterministic prompt composition + snapshots
+- `src/runner/codex.ts` — first Runner adapter; no provider assumptions outside it
+- `src/server/routes/agent-api.ts` — the agent's session-control surface (M12)
+- `src/entities/` — Session/Turn/TurnEvent state; the schema everything hangs off
 - `src/server/index.ts` — Express bootstrap

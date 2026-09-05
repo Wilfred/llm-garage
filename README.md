@@ -80,6 +80,6 @@ tools. These shaped the design or serve as useful points of comparison:
 
 What llm-garage does that most of these don't: treat **sessions as a tree the
 agent itself manages** (spawn subagents, finish yourself, let a human iterate on
-each leaf), keep a **versioned system-prompt library** composed per run, make
+each leaf), keep a **versioned system-prompt library** snapshotted per turn, make
 **auto-merge on green CI** a first-class toggle, and swap the whole **agent engine**
 (not just the model) behind one `Runner` interface.
