@@ -49,7 +49,11 @@ export function NewSessionPage({
           </div>
           <label>
             Session title
-            <input name="title" required placeholder="Improve the settings workflow" />
+            <input
+              name="title"
+              required
+              placeholder="Improve the settings workflow"
+            />
           </label>
           <label>
             Task for the agent
@@ -87,7 +91,12 @@ export function NewSessionPage({
                 Create a pull request
               </label>
               <label class="check">
-                <input id="auto-merge" type="checkbox" name="autoMerge" value="yes" />{" "}
+                <input
+                  id="auto-merge"
+                  type="checkbox"
+                  name="autoMerge"
+                  value="yes"
+                />{" "}
                 Auto-merge when CI passes
               </label>
             </div>
@@ -232,7 +241,9 @@ export function SessionDetailPage({
                   : "Pull-request creation is off for this session."}
               </p>
             )}
-            {session.autoMerge && <p class="muted small">Auto-merge is enabled.</p>}
+            {session.autoMerge && (
+              <p class="muted small">Auto-merge is enabled.</p>
+            )}
           </section>
         </aside>
       </div>
@@ -283,7 +294,9 @@ function SessionTree({
   const renderNodes = (nodes: Session[]) => (
     <ul class="tree">
       {nodes.map((node) => {
-        const children = sessions.filter(({ parentId }) => parentId === node.id);
+        const children = sessions.filter(
+          ({ parentId }) => parentId === node.id,
+        );
         return (
           <li>
             <a href={`/sessions/${node.id}`}>

@@ -14,7 +14,8 @@ type MemoryStoreOptions = {
   simulationStepMs?: number;
 };
 
-const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60_000);
+const minutesAgo = (minutes: number): Date =>
+  new Date(Date.now() - minutes * 60_000);
 
 export class MemoryDataStore implements DataStore {
   private readonly repos = new Map<string, Repo>();
@@ -26,7 +27,10 @@ export class MemoryDataStore implements DataStore {
   private sequence = 100;
   private lastTimestamp = 0;
 
-  constructor({ seed = true, simulationStepMs = 500 }: MemoryStoreOptions = {}) {
+  constructor({
+    seed = true,
+    simulationStepMs = 500,
+  }: MemoryStoreOptions = {}) {
     this.simulationStepMs = simulationStepMs;
     if (seed) this.seed();
   }
@@ -47,7 +51,9 @@ export class MemoryDataStore implements DataStore {
 
   async deleteRepo(id: string): Promise<DeleteRepoResult> {
     if (!this.repos.has(id)) return "not_found";
-    const inUse = [...this.sessions.values()].some((session) => session.repoId === id);
+    const inUse = [...this.sessions.values()].some(
+      (session) => session.repoId === id,
+    );
     if (inUse) return "in_use";
     this.repos.delete(id);
     return "deleted";
@@ -65,7 +71,9 @@ export class MemoryDataStore implements DataStore {
 
   async createSession(input: CreateSessionInput): Promise<Session> {
     if (!this.repos.has(input.repoId)) throw new Error("Repository not found");
-    const parent = input.parentId ? this.sessions.get(input.parentId) : undefined;
+    const parent = input.parentId
+      ? this.sessions.get(input.parentId)
+      : undefined;
     if (input.parentId && !parent) throw new Error("Parent session not found");
     const now = this.now();
     const id = this.id("session");
@@ -101,7 +109,9 @@ export class MemoryDataStore implements DataStore {
   async listTurns(sessionId: string): Promise<Turn[]> {
     return [...this.turns.values()]
       .filter((turn) => turn.sessionId === sessionId)
-      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+      .sort(
+        (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      );
   }
 
   async listRunEvents(turnId: string): Promise<RunEvent[]> {
@@ -134,7 +144,10 @@ export class MemoryDataStore implements DataStore {
 
   async cancelSession(sessionId: string): Promise<boolean> {
     const session = this.sessions.get(sessionId);
-    if (!session || (session.status !== "running" && session.status !== "queued"))
+    if (
+      !session ||
+      (session.status !== "running" && session.status !== "queued")
+    )
       return false;
     this.clearTimers(session.id);
     session.status = "cancelled";
@@ -156,7 +169,11 @@ export class MemoryDataStore implements DataStore {
     if (turn) {
       turn.status = "cancelled";
       turn.finishedAt = this.now();
-      this.addEvent(turn.id, "status", "Turn stopped because the session was archived");
+      this.addEvent(
+        turn.id,
+        "status",
+        "Turn stopped because the session was archived",
+      );
     }
     session.status = "archived";
     session.updatedAt = this.now();
@@ -336,7 +353,9 @@ export class MemoryDataStore implements DataStore {
         status,
         createdAt: session.createdAt,
         finishedAt:
-          status === "running" || status === "queued" ? undefined : session.updatedAt,
+          status === "running" || status === "queued"
+            ? undefined
+            : session.updatedAt,
       };
       this.turns.set(turn.id, turn);
       this.addEvent(

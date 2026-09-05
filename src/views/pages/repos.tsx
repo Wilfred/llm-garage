@@ -25,10 +25,13 @@ export function ReposPage({
           Add repository
         </a>
       </div>
-      {notice && <div class={success ? "notice notice-success" : "notice"}>{notice}</div>}
+      {notice && (
+        <div class={success ? "notice notice-success" : "notice"}>{notice}</div>
+      )}
       {repos.length === 0 ? (
         <EmptyState>
-          No repositories yet. <a href="/repos/new">Add a repository</a> to get started.
+          No repositories yet. <a href="/repos/new">Add a repository</a> to get
+          started.
         </EmptyState>
       ) : (
         <div class="table-wrap">
@@ -53,7 +56,9 @@ export function ReposPage({
                       </a>
                     </td>
                     <td>
-                      <a href={`/sessions?repoId=${encodeURIComponent(repo.id)}`}>
+                      <a
+                        href={`/sessions?repoId=${encodeURIComponent(repo.id)}`}
+                      >
                         {repoSessions.length}
                       </a>
                     </td>
@@ -86,15 +91,30 @@ export function NewRepoPage({ error }: { error?: string }) {
       <form class="card stack form-card" method="post" action="/repos">
         <label>
           Owner
-          <input name="owner" required placeholder="octocat" autocomplete="off" />
+          <input
+            name="owner"
+            required
+            placeholder="octocat"
+            autocomplete="off"
+          />
         </label>
         <label>
           Repository name
-          <input name="name" required placeholder="hello-world" autocomplete="off" />
+          <input
+            name="name"
+            required
+            placeholder="hello-world"
+            autocomplete="off"
+          />
         </label>
         <label>
           Default branch
-          <input name="defaultBranch" required value="main" autocomplete="off" />
+          <input
+            name="defaultBranch"
+            required
+            value="main"
+            autocomplete="off"
+          />
         </label>
         <button class="button button-primary" type="submit">
           Add repository
@@ -104,7 +124,13 @@ export function NewRepoPage({ error }: { error?: string }) {
   );
 }
 
-export function RepoDetailPage({ repo, sessions }: { repo: Repo; sessions: Session[] }) {
+export function RepoDetailPage({
+  repo,
+  sessions,
+}: {
+  repo: Repo;
+  sessions: Session[];
+}) {
   const activeCount = sessions.filter(isActive).length;
   const sessionsUrl = `/sessions?repoId=${encodeURIComponent(repo.id)}`;
   return (
@@ -154,7 +180,9 @@ export function RepoDetailPage({ repo, sessions }: { repo: Repo; sessions: Sessi
       </div>
       <p class="muted small repo-created">
         Added{" "}
-        <time dateTime={repo.createdAt.toISOString()}>{formatDate(repo.createdAt)}</time>
+        <time dateTime={repo.createdAt.toISOString()}>
+          {formatDate(repo.createdAt)}
+        </time>
       </p>
     </Layout>
   );

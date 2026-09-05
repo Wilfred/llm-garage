@@ -34,7 +34,8 @@ export type Session = {
 };
 
 export type TurnKind = "initial" | "feedback" | "spawn";
-export type TurnStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+export type TurnStatus =
+  "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export type Turn = {
   id: string;

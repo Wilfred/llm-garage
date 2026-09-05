@@ -1,6 +1,10 @@
 import { Router } from "express";
 import type { DataStore } from "../../store/types";
-import { NewRepoPage, RepoDetailPage, ReposPage } from "../../views/pages/repos";
+import {
+  NewRepoPage,
+  RepoDetailPage,
+  ReposPage,
+} from "../../views/pages/repos";
 import { NotFoundPage } from "../../views/pages/sessions";
 import { renderPage } from "../../views/render";
 import { formField, noticeUrl, queryString } from "./forms";
@@ -58,11 +62,19 @@ export function createReposRouter(store: DataStore): Router {
       res
         .status(404)
         .type("html")
-        .send(renderPage(<NotFoundPage message="That repository does not exist." />));
+        .send(
+          renderPage(
+            <NotFoundPage message="That repository does not exist." />,
+          ),
+        );
       return;
     }
-    const sessions = allSessions.filter((session) => session.repoId === repo.id);
-    res.type("html").send(renderPage(<RepoDetailPage repo={repo} sessions={sessions} />));
+    const sessions = allSessions.filter(
+      (session) => session.repoId === repo.id,
+    );
+    res
+      .type("html")
+      .send(renderPage(<RepoDetailPage repo={repo} sessions={sessions} />));
   });
 
   router.post("/repos/:id/delete", async (req, res) => {

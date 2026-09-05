@@ -101,7 +101,9 @@ export function createSessionsRouter(store: DataStore): Router {
       res
         .status(404)
         .type("html")
-        .send(renderPage(<NotFoundPage message="That session does not exist." />));
+        .send(
+          renderPage(<NotFoundPage message="That session does not exist." />),
+        );
       return;
     }
     const [repo, sessions, turns] = await Promise.all([
