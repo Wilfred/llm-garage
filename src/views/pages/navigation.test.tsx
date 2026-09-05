@@ -17,6 +17,10 @@ test("keeps the primary navigation focused", async () => {
   assert.match(html, /🛠️/u);
   assert.match(html, /href="\/sessions"/);
   assert.doesNotMatch(html, /href="\/prompts"/);
+  assert.doesNotMatch(
+    html,
+    /<nav[^>]*>(?:(?!<\/nav>).)*>(?:Dashboard|About)</s,
+  );
   assert.doesNotMatch(html, /Workshop overview/);
   assert.doesNotMatch(html, /Start a session/);
   assert.equal(html.match(/href="\/sessions\/new"/g)?.length, 1);
