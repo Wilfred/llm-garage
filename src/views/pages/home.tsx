@@ -11,6 +11,9 @@ export function HomePage() {
       <p>
         Check <a href="/healthz">/healthz</a> for a liveness check.
       </p>
+      <p>
+        View <a href="/about">build and runtime information</a> for this instance.
+      </p>
     </Layout>
   );
 }
