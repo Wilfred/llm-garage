@@ -9,11 +9,14 @@ import type {
   Turn,
 } from "./types";
 import { getModel } from "../models";
+import { DummyWorker } from "../worker/dummy";
+import type { SessionWorker } from "../worker/types";
 import { RepoAlreadyExistsError } from "./errors";
 
 export type MemoryStoreOptions = {
   seed?: boolean;
   simulationStepMs?: number;
+  worker?: SessionWorker;
 };
 
 const minutesAgo = (minutes: number): Date =>
@@ -24,16 +27,17 @@ export class MemoryDataStore implements DataStore {
   private readonly sessions = new Map<string, Session>();
   private readonly turns = new Map<string, Turn>();
   private readonly events = new Map<string, RunEvent>();
-  private readonly timers = new Map<string, NodeJS.Timeout[]>();
-  private readonly simulationStepMs: number;
+  private readonly activeWorkers = new Map<string, AbortController>();
+  private readonly worker: SessionWorker;
   private sequence = 100;
   private lastTimestamp = 0;
 
   constructor({
     seed = true,
     simulationStepMs = 500,
+    worker = new DummyWorker({ stepDelayMs: simulationStepMs }),
   }: MemoryStoreOptions = {}) {
-    this.simulationStepMs = simulationStepMs;
+    this.worker = worker;
     if (seed) this.seed();
   }
 
@@ -109,7 +113,7 @@ export class MemoryDataStore implements DataStore {
       createdAt: now,
     };
     this.turns.set(turn.id, turn);
-    this.simulateTurn(session.id, turn.id);
+    this.startWorker(session.id, turn.id);
     return session;
   }
 
@@ -145,7 +149,7 @@ export class MemoryDataStore implements DataStore {
     this.turns.set(turn.id, turn);
     session.status = "running";
     session.updatedAt = now;
-    this.simulateTurn(session.id, turn.id);
+    this.startWorker(session.id, turn.id);
     return turn;
   }
 
@@ -156,7 +160,7 @@ export class MemoryDataStore implements DataStore {
       (session.status !== "running" && session.status !== "queued")
     )
       return false;
-    this.clearTimers(session.id);
+    this.stopWorker(session.id);
     session.status = "cancelled";
     session.updatedAt = this.now();
     const turn = this.activeTurn(session.id);
@@ -171,7 +175,7 @@ export class MemoryDataStore implements DataStore {
   async archiveSession(sessionId: string): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     if (!session || session.status === "archived") return false;
-    this.clearTimers(session.id);
+    this.stopWorker(session.id);
     const turn = this.activeTurn(session.id);
     if (turn) {
       turn.status = "cancelled";
@@ -187,55 +191,66 @@ export class MemoryDataStore implements DataStore {
     return true;
   }
 
-  private simulateTurn(sessionId: string, turnId: string): void {
+  private startWorker(sessionId: string, turnId: string): void {
     const session = this.sessions.get(sessionId);
-    const model = session ? getModel(session.modelId) : undefined;
-    this.addEvent(
-      turnId,
-      "status",
-      model
-        ? `${model.name} agent started via OpenRouter`
-        : "Prototype agent started",
-    );
-    const lines = [
-      "Preparing an isolated workspace…",
-      "Reading the repository and task…",
-      "Prototype work complete; waiting for your review.",
-    ];
-    const handles = lines.map((line, index) =>
-      setTimeout(
-        () => {
-          const session = this.sessions.get(sessionId);
+    if (!session) return;
+    const model = getModel(session.modelId);
+    const controller = new AbortController();
+    this.activeWorkers.set(sessionId, controller);
+    this.addEvent(turnId, "status", `${model.name} dummy worker started`);
+    void this.worker
+      .run({
+        modelName: model.name,
+        taskPrompt: session.taskPrompt,
+        signal: controller.signal,
+        emit: ({ kind, data }) => {
+          const currentSession = this.sessions.get(sessionId);
           const turn = this.turns.get(turnId);
-          if (session?.status === "running" && turn?.status === "running") {
-            this.addEvent(turnId, "log", line);
-            session.updatedAt = this.now();
+          if (
+            currentSession?.status === "running" &&
+            turn?.status === "running"
+          ) {
+            this.addEvent(turnId, kind, data);
+            currentSession.updatedAt = this.now();
           }
         },
-        this.simulationStepMs * (index + 1),
-      ),
-    );
-    handles.push(
-      setTimeout(() => {
+      })
+      .then(() => {
         const session = this.sessions.get(sessionId);
         const turn = this.turns.get(turnId);
         if (session?.status === "running" && turn?.status === "running") {
           turn.status = "succeeded";
           turn.finishedAt = this.now();
-          session.status = "awaiting_feedback";
+          session.status = "succeeded";
           session.updatedAt = this.now();
-          this.addEvent(turnId, "status", "Awaiting feedback");
+          this.addEvent(turnId, "status", "Session finished");
         }
-        this.timers.delete(sessionId);
-      }, this.simulationStepMs * 4),
-    );
-    for (const handle of handles) handle.unref();
-    this.timers.set(sessionId, handles);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const session = this.sessions.get(sessionId);
+        const turn = this.turns.get(turnId);
+        if (session?.status === "running" && turn?.status === "running") {
+          turn.status = "failed";
+          turn.finishedAt = this.now();
+          session.status = "failed";
+          session.updatedAt = this.now();
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.addEvent(turnId, "system", `Worker failed: ${message}`);
+          this.addEvent(turnId, "status", "Session failed");
+        }
+      })
+      .finally(() => {
+        if (this.activeWorkers.get(sessionId) === controller) {
+          this.activeWorkers.delete(sessionId);
+        }
+      });
   }
 
-  private clearTimers(sessionId: string): void {
-    for (const handle of this.timers.get(sessionId) ?? []) clearTimeout(handle);
-    this.timers.delete(sessionId);
+  private stopWorker(sessionId: string): void {
+    this.activeWorkers.get(sessionId)?.abort();
+    this.activeWorkers.delete(sessionId);
   }
 
   private activeTurn(sessionId: string): Turn | undefined {
