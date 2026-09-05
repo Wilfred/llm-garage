@@ -17,7 +17,7 @@ async function waitForStatus(
   assert.equal((await store.getSession(sessionId))?.status, expected);
 }
 
-test("seeds repositories and every prototype session state", async () => {
+void test("seeds repositories and every prototype session state", async () => {
   const store = new MemoryDataStore();
 
   assert.equal((await store.listRepos()).length, 3);
@@ -35,7 +35,7 @@ test("seeds repositories and every prototype session state", async () => {
   }
 });
 
-test("supports the prototype repository workflow", async () => {
+void test("supports the prototype repository workflow", async () => {
   const store = new MemoryDataStore({ seed: false });
   const disposable = await store.createRepo({
     owner: "example",
@@ -46,7 +46,7 @@ test("supports the prototype repository workflow", async () => {
   assert.equal(await store.getRepo(disposable.id), undefined);
 });
 
-test("runs the dummy worker for initial and feedback turns", async () => {
+void test("runs the dummy worker for initial and feedback turns", async () => {
   const store = new MemoryDataStore({ seed: false, simulationStepMs: 1 });
   const repo = await store.createRepo({
     owner: "example",
@@ -66,7 +66,8 @@ test("runs the dummy worker for initial and feedback turns", async () => {
   await waitForStatus(store, session.id, "succeeded");
   const [initialTurn] = await store.listTurns(session.id);
   assert.equal(initialTurn?.status, "succeeded");
-  const events = await store.listRunEvents(initialTurn!.id);
+  assert.ok(initialTurn);
+  const events = await store.listRunEvents(initialTurn.id);
   assert.deepEqual(
     events.map(({ kind }) => kind),
     [
@@ -94,7 +95,7 @@ test("runs the dummy worker for initial and feedback turns", async () => {
   assert.equal((await store.getSession(session.id))?.status, "archived");
 });
 
-test("records a worker failure as a terminal session", async () => {
+void test("records a worker failure as a terminal session", async () => {
   const store = new MemoryDataStore({
     seed: false,
     worker: {
@@ -122,14 +123,14 @@ test("records a worker failure as a terminal session", async () => {
   assert.equal((await store.getSession(session.id))?.status, "failed");
   const [turn] = await store.listTurns(session.id);
   assert.equal(turn?.status, "failed");
-  const events = await store.listRunEvents(turn!.id);
-  assert.match(
-    events.find(({ kind }) => kind === "system")!.data,
-    /Synthetic provider failure/,
-  );
+  assert.ok(turn);
+  const events = await store.listRunEvents(turn.id);
+  const systemEvent = events.find(({ kind }) => kind === "system");
+  assert.ok(systemEvent);
+  assert.match(systemEvent.data, /Synthetic provider failure/);
 });
 
-test("cancels a running prototype turn without later changing its state", async () => {
+void test("cancels a running prototype turn without later changing its state", async () => {
   const store = new MemoryDataStore({ seed: false, simulationStepMs: 5 });
   const repo = await store.createRepo({
     owner: "example",

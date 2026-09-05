@@ -90,7 +90,7 @@ export class MemoryDataStore implements DataStore {
     const id = this.id("session");
     const session: Session = {
       id,
-      parentId: parent?.id,
+      ...(parent ? { parentId: parent.id } : {}),
       rootId: parent?.rootId ?? id,
       repoId: input.repoId,
       title: input.title,
@@ -397,10 +397,9 @@ export class MemoryDataStore implements DataStore {
         prompt: session.taskPrompt,
         status,
         createdAt: session.createdAt,
-        finishedAt:
-          status === "running" || status === "queued"
-            ? undefined
-            : session.updatedAt,
+        ...(status === "running" || status === "queued"
+          ? {}
+          : { finishedAt: session.updatedAt }),
       };
       this.turns.set(turn.id, turn);
       this.addEvent(
@@ -438,7 +437,7 @@ export class MemoryDataStore implements DataStore {
   ): Session {
     return {
       id,
-      parentId,
+      ...(parentId === undefined ? {} : { parentId }),
       rootId: parentId ? "session-m3" : id,
       repoId,
       title,

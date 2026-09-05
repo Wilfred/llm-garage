@@ -19,7 +19,7 @@ export function createSessionsRouter(store: DataStore): Router {
       store.listRepos(),
       store.listSessions(),
     ]);
-    const repoId = queryString(req.query.repoId);
+    const repoId = queryString(req.query["repoId"]);
     const { selectedRepo, visibleSessions } = filterSessionsByRepo(
       repos,
       sessions,
@@ -32,7 +32,7 @@ export function createSessionsRouter(store: DataStore): Router {
           <SessionsPage
             repos={repos}
             sessions={visibleSessions}
-            selectedRepo={selectedRepo}
+            {...(selectedRepo === undefined ? {} : { selectedRepo })}
           />,
         ),
       );
@@ -43,6 +43,7 @@ export function createSessionsRouter(store: DataStore): Router {
       store.listRepos(),
       store.listSessions(),
     ]);
+    const selectedRepoId = queryString(req.query["repoId"]);
     res
       .type("html")
       .send(
@@ -50,7 +51,7 @@ export function createSessionsRouter(store: DataStore): Router {
           <NewSessionPage
             repos={repos}
             sessions={sessions}
-            selectedRepoId={queryString(req.query.repoId)}
+            {...(selectedRepoId === undefined ? {} : { selectedRepoId })}
           />,
         ),
       );
@@ -81,9 +82,10 @@ export function createSessionsRouter(store: DataStore): Router {
         );
       return;
     }
+    const parentId = formField(req.body, "parentId");
     const session = await store.createSession({
       repoId,
-      parentId: formField(req.body, "parentId") || undefined,
+      ...(parentId ? { parentId } : {}),
       title,
       taskPrompt,
       modelId,
@@ -125,7 +127,7 @@ export function createSessionsRouter(store: DataStore): Router {
         renderPage(
           <SessionDetailPage
             session={session}
-            repo={repo}
+            {...(repo === undefined ? {} : { repo })}
             breadcrumb={breadcrumb}
             tree={tree}
             transcript={transcript}
@@ -162,7 +164,7 @@ export function filterSessionsByRepo(
     ? repos.find((candidate) => candidate.id === repoId)
     : undefined;
   return {
-    selectedRepo,
+    ...(selectedRepo === undefined ? {} : { selectedRepo }),
     visibleSessions: selectedRepo
       ? sessions.filter((session) => session.repoId === selectedRepo.id)
       : sessions,

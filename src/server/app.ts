@@ -21,7 +21,7 @@ export function createApp(dataSource: DataSource, store: DataStore): Express {
     res
       .status(404)
       .type("html")
-      .send(renderPage(h(NotFoundPage, { message: undefined })));
+      .send(renderPage(h(NotFoundPage, null)));
   });
 
   return app;

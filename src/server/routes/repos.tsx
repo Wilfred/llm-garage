@@ -18,6 +18,7 @@ export function createReposRouter(store: DataStore): Router {
       store.listRepos(),
       store.listSessions(),
     ]);
+    const notice = queryString(req.query["notice"]);
     res
       .type("html")
       .send(
@@ -25,7 +26,7 @@ export function createReposRouter(store: DataStore): Router {
           <ReposPage
             repos={repos}
             sessions={sessions}
-            notice={queryString(req.query.notice)}
+            {...(notice === undefined ? {} : { notice })}
           />,
         ),
       );

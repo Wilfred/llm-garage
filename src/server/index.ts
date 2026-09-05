@@ -21,7 +21,9 @@ async function main(): Promise<void> {
     throw error;
   }
 
-  console.log(`llm-garage listening on http://${config.HOST}:${config.PORT}`);
+  console.log(
+    `llm-garage listening on http://${config.HOST}:${config.PORT.toString()}`,
+  );
   installShutdownHandlers(server);
 }
 

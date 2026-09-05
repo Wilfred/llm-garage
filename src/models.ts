@@ -28,5 +28,7 @@ export function isModelId(value: string): value is ModelId {
 }
 
 export function getModel(modelId: ModelId): (typeof modelCatalog)[number] {
-  return modelCatalog.find((model) => model.id === modelId)!;
+  const model = modelCatalog.find((candidate) => candidate.id === modelId);
+  if (!model) throw new Error(`Unknown model: ${modelId}`);
+  return model;
 }

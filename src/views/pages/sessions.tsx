@@ -144,7 +144,7 @@ export function SessionDetailPage({
     <Layout
       title={session.title}
       section="sessions"
-      refreshSeconds={canCancel ? 1 : undefined}
+      {...(canCancel ? { refreshSeconds: 1 } : {})}
     >
       <div class="breadcrumb">
         <a href="/sessions">Sessions</a>

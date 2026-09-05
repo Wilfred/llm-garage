@@ -23,7 +23,7 @@ export function formatDuration(totalSeconds: number): string {
   for (const unit of units) {
     const value = Math.floor(remaining / unit.seconds);
     if (value > 0 || (unit.seconds === 1 && parts.length === 0)) {
-      parts.push(`${value} ${unit.label}${value === 1 ? "" : "s"}`);
+      parts.push(`${value.toString()} ${unit.label}${value === 1 ? "" : "s"}`);
       remaining %= unit.seconds;
     }
     if (parts.length === 2) break;

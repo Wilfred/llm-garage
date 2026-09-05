@@ -6,7 +6,7 @@ import { DashboardPage } from "./dashboard";
 import { NewRepoPage, RepoDetailPage, ReposPage } from "./repos";
 import { NewSessionPage, SessionsPage } from "./sessions";
 
-test("keeps the primary navigation focused", async () => {
+void test("keeps the primary navigation focused", async () => {
   const store = new MemoryDataStore();
   const [repos, sessions] = await Promise.all([
     store.listRepos(),
@@ -26,7 +26,7 @@ test("keeps the primary navigation focused", async () => {
   assert.equal(html.match(/href="\/sessions\/new"/g)?.length, 1);
 });
 
-test("renders the repository listing without branch or delete controls", async () => {
+void test("renders the repository listing without branch or delete controls", async () => {
   const store = new MemoryDataStore();
   const [repos, sessions] = await Promise.all([
     store.listRepos(),
@@ -46,13 +46,13 @@ test("renders the repository listing without branch or delete controls", async (
     assert.match(
       html,
       new RegExp(
-        `href="/sessions\\?repoId=${repo.id}">${repoSessions.length}</a>`,
+        `href="/sessions\\?repoId=${repo.id}">${repoSessions.length.toString()}</a>`,
       ),
     );
   }
 });
 
-test("renders repository creation on its own page", () => {
+void test("renders repository creation on its own page", () => {
   const html = renderPage(<NewRepoPage />);
 
   assert.match(
@@ -62,11 +62,10 @@ test("renders repository creation on its own page", () => {
   assert.match(html, /<h1>Add repository<\/h1>/);
 });
 
-test("renders repository details and session counts", async () => {
+void test("renders repository details and session counts", async () => {
   const store = new MemoryDataStore();
-  const repo = (await store.listRepos()).find(
-    ({ id }) => id === "repo-garage",
-  )!;
+  const repo = (await store.listRepos()).find(({ id }) => id === "repo-garage");
+  assert.ok(repo);
   const sessions = (await store.listSessions()).filter(
     (session) => session.repoId === repo.id,
   );
@@ -81,7 +80,7 @@ test("renders repository details and session counts", async () => {
   assert.match(html, /href="\/sessions\?repoId=repo-garage">4<\/a>/);
 });
 
-test("lists every session on the sessions page", async () => {
+void test("lists every session on the sessions page", async () => {
   const store = new MemoryDataStore();
   const [repos, sessions] = await Promise.all([
     store.listRepos(),
@@ -92,10 +91,11 @@ test("lists every session on the sessions page", async () => {
   for (const session of sessions) assert.match(html, new RegExp(session.title));
 });
 
-test("labels a repository-filtered sessions page", async () => {
+void test("labels a repository-filtered sessions page", async () => {
   const store = new MemoryDataStore();
   const repos = await store.listRepos();
   const selectedRepo = repos[0];
+  assert.ok(selectedRepo);
   const sessions = (await store.listSessions()).filter(
     (session) => session.repoId === selectedRepo.id,
   );
@@ -120,7 +120,7 @@ test("labels a repository-filtered sessions page", async () => {
   }
 });
 
-test("new-session form has no prompt-library controls", async () => {
+void test("new-session form has no prompt-library controls", async () => {
   const store = new MemoryDataStore();
   const html = renderPage(
     <NewSessionPage
@@ -142,7 +142,7 @@ test("new-session form has no prompt-library controls", async () => {
   assert.match(html, /value="z-ai\/glm-5\.2"/);
 });
 
-test("identifies each session's model and OpenRouter gateway", async () => {
+void test("identifies each session's model and OpenRouter gateway", async () => {
   const store = new MemoryDataStore();
   const repos = await store.listRepos();
   const sessions = await store.listSessions();

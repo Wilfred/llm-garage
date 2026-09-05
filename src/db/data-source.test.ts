@@ -7,7 +7,7 @@ import type { DataSource } from "typeorm";
 import { createAppDataSource, databaseFilename } from "./data-source";
 import { Setting } from "../entities/setting";
 
-test("creates a WAL database and persists settings across restarts", async (t) => {
+void test("creates a WAL database and persists settings across restarts", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-db-"));
   let dataSource: DataSource | undefined;
 
@@ -21,9 +21,9 @@ test("creates a WAL database and persists settings across restarts", async (t) =
   dataSource = createAppDataSource(dataDir);
   await dataSource.initialize();
 
-  const journalMode = (await dataSource.query("PRAGMA journal_mode")) as Array<{
+  const journalMode: Array<{
     journal_mode: string;
-  }>;
+  }> = await dataSource.query("PRAGMA journal_mode");
   assert.equal(journalMode[0]?.journal_mode, "wal");
 
   await dataSource.getRepository(Setting).save({

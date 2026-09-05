@@ -8,7 +8,10 @@ module.exports = tseslint.config(
   },
   {
     files: ["src/**/*.ts", "src/**/*.tsx"],
-    extends: [eslint.configs.recommended, ...tseslint.configs.recommended],
+    extends: [
+      eslint.configs.recommended,
+      ...tseslint.configs.strictTypeChecked,
+    ],
     languageOptions: {
       parserOptions: {
         project: "./tsconfig.json",
@@ -16,8 +19,9 @@ module.exports = tseslint.config(
       },
     },
     rules: {
+      "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
     },
