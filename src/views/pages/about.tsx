@@ -46,7 +46,7 @@ export function AboutPage({
   return (
     <Layout title="About" section="about">
       <h1>About</h1>
-      <p>Build and runtime information for this llm-garage instance.</p>
+      <p>Build and runtime information for this LLM Garage instance.</p>
       <dl class="system-info">
         <dt>Git commit</dt>
         <dd>

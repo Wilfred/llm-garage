@@ -14,7 +14,7 @@ const navItems: Array<{
 ];
 
 export function Layout({
-  title = "llm-garage",
+  title = "LLM Garage",
   section,
   children,
   refreshSeconds,
@@ -34,17 +34,17 @@ export function Layout({
           <meta http-equiv="refresh" content={String(refreshSeconds)} />
         )}
         <title>
-          {title === "llm-garage" ? title : `${title} · llm-garage`}
+          {title === "LLM Garage" ? title : `${title} · LLM Garage`}
         </title>
         <style>{styles}</style>
       </head>
       <body>
         <header class="site-header">
-          <a class="brand" href="/" aria-label="llm-garage dashboard">
+          <a class="brand" href="/" aria-label="LLM Garage dashboard">
             <span class="brand-mark" aria-hidden="true">
               🛠️
             </span>
-            <span>llm-garage</span>
+            <span>LLM Garage</span>
           </a>
           <nav aria-label="Primary navigation">
             {navItems.map((item) => (
