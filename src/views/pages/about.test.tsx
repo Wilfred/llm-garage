@@ -4,13 +4,13 @@ import { renderPage } from "../render";
 import { AboutPage, formatDuration } from "./about";
 import { DashboardPage } from "./dashboard";
 
-test("formats uptime as a concise duration", () => {
+void test("formats uptime as a concise duration", () => {
   assert.equal(formatDuration(0), "0 seconds");
   assert.equal(formatDuration(61), "1 minute, 1 second");
   assert.equal(formatDuration(183_845), "2 days, 3 hours");
 });
 
-test("renders build and runtime information", () => {
+void test("renders build and runtime information", () => {
   const html = renderPage(
     <AboutPage
       gitCommit="0123456789abcdef"
@@ -30,7 +30,7 @@ test("renders build and runtime information", () => {
   assert.match(html, /2 days, 3 hours/);
 });
 
-test("links to the about page from the footer", () => {
+void test("links to the about page from the footer", () => {
   const html = renderPage(<DashboardPage repos={[]} sessions={[]} />);
 
   assert.match(html, /<footer><a href="\/about">About<\/a>/);

@@ -21,16 +21,18 @@ export function loadBuildInfo(): BuildInfo {
 
     return {
       gitCommit:
-        typeof candidate.gitCommit === "string" ? candidate.gitCommit : null,
+        typeof candidate["gitCommit"] === "string"
+          ? candidate["gitCommit"]
+          : null,
       imageBuildTime:
-        typeof candidate.imageBuildTime === "string"
-          ? candidate.imageBuildTime
+        typeof candidate["imageBuildTime"] === "string"
+          ? candidate["imageBuildTime"]
           : null,
     };
   } catch {
     return {
-      gitCommit: process.env.GIT_COMMIT ?? null,
-      imageBuildTime: process.env.IMAGE_BUILD_TIME ?? null,
+      gitCommit: process.env["GIT_COMMIT"] ?? null,
+      imageBuildTime: process.env["IMAGE_BUILD_TIME"] ?? null,
     };
   }
 }

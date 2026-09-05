@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server/index.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "node dist/server/index.js",
     "lint": "eslint .",
     "test": "node --import tsx --test \"src/**/*.test.{ts,tsx}\"",

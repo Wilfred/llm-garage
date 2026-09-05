@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-test("exits unsuccessfully when the HTTP server cannot bind", async (t) => {
+void test("exits unsuccessfully when the HTTP server cannot bind", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-startup-"));
   t.after(() => rm(dataDir, { recursive: true, force: true }));
   const childEnv: NodeJS.ProcessEnv = {
@@ -14,7 +14,7 @@ test("exits unsuccessfully when the HTTP server cannot bind", async (t) => {
     HOST: "192.0.2.1",
     PORT: "3000",
   };
-  delete childEnv.NODE_TEST_CONTEXT;
+  delete childEnv["NODE_TEST_CONTEXT"];
   const stdoutPath = path.join(dataDir, "stdout.log");
   const stderrPath = path.join(dataDir, "stderr.log");
   const stdoutFile = await open(stdoutPath, "w");

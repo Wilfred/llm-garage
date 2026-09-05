@@ -3,7 +3,7 @@ import test from "node:test";
 import { MemoryDataStore } from "../../store/memory";
 import { filterSessionsByRepo } from "./sessions";
 
-test("filters sessions by a known repository", async () => {
+void test("filters sessions by a known repository", async () => {
   const store = new MemoryDataStore();
   const [repos, sessions] = await Promise.all([
     store.listRepos(),
@@ -19,7 +19,7 @@ test("filters sessions by a known repository", async () => {
   );
 });
 
-test("ignores an unknown repository filter", async () => {
+void test("ignores an unknown repository filter", async () => {
   const store = new MemoryDataStore();
   const [repos, sessions] = await Promise.all([
     store.listRepos(),

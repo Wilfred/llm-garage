@@ -10,7 +10,7 @@ import { RepoAlreadyExistsError } from "./errors";
 import { DatabaseDataStore } from "./db";
 import type { DataStore, SessionStatus } from "./types";
 
-test("persists repository CRUD across data source restarts", async (t) => {
+void test("persists repository CRUD across data source restarts", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-repos-"));
   let dataSource: DataSource | undefined;
 
@@ -51,7 +51,7 @@ test("persists repository CRUD across data source restarts", async (t) => {
   assert.equal((await store.listRepos()).length, 3);
 });
 
-test("persists sessions, turns, and ordered events across restarts", async (t) => {
+void test("persists sessions, turns, and ordered events across restarts", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-sessions-"));
   let dataSource = createAppDataSource(dataDir);
   t.after(async () => {
