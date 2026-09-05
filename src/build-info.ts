@@ -20,9 +20,12 @@ export function loadBuildInfo(): BuildInfo {
     const candidate = parsed as Record<string, unknown>;
 
     return {
-      gitCommit: typeof candidate.gitCommit === "string" ? candidate.gitCommit : null,
+      gitCommit:
+        typeof candidate.gitCommit === "string" ? candidate.gitCommit : null,
       imageBuildTime:
-        typeof candidate.imageBuildTime === "string" ? candidate.imageBuildTime : null,
+        typeof candidate.imageBuildTime === "string"
+          ? candidate.imageBuildTime
+          : null,
     };
   } catch {
     return {

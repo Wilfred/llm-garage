@@ -12,9 +12,14 @@ export function DashboardPage({
   const active = sessions.filter(
     ({ status }) => status === "running" || status === "queued",
   );
-  const awaiting = sessions.filter(({ status }) => status === "awaiting_feedback");
+  const awaiting = sessions.filter(
+    ({ status }) => status === "awaiting_feedback",
+  );
   const recent = sessions
-    .filter(({ status }) => !["running", "queued", "awaiting_feedback"].includes(status))
+    .filter(
+      ({ status }) =>
+        !["running", "queued", "awaiting_feedback"].includes(status),
+    )
     .slice(0, 6);
 
   return (

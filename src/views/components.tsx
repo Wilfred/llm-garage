@@ -9,7 +9,9 @@ export function formatDate(date: Date): string {
 }
 
 export function StatusBadge({ status }: { status: SessionStatus }) {
-  return <span class={`status status-${status}`}>{status.replaceAll("_", " ")}</span>;
+  return (
+    <span class={`status status-${status}`}>{status.replaceAll("_", " ")}</span>
+  );
 }
 
 export function EmptyState({ children }: { children: ComponentChildren }) {
@@ -33,7 +35,9 @@ export function SessionCards({
             <StatusBadge status={session.status} />
             <div class="card-title">{session.title}</div>
             <div class="card-meta">
-              <span>{repo ? `${repo.owner}/${repo.name}` : "Unknown repository"}</span>
+              <span>
+                {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"}
+              </span>
               <time dateTime={session.updatedAt.toISOString()}>
                 {formatDate(session.updatedAt)}
               </time>

@@ -2,7 +2,11 @@ import type { ComponentChildren } from "preact";
 
 export type NavigationSection = "dashboard" | "repos" | "sessions" | "about";
 
-const navItems: Array<{ href: string; label: string; section: NavigationSection }> = [
+const navItems: Array<{
+  href: string;
+  label: string;
+  section: NavigationSection;
+}> = [
   { href: "/", label: "Dashboard", section: "dashboard" },
   { href: "/repos", label: "Repositories", section: "repos" },
   { href: "/sessions", label: "Sessions", section: "sessions" },
@@ -26,8 +30,12 @@ export function Layout({
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="dark" />
-        {refreshSeconds && <meta http-equiv="refresh" content={String(refreshSeconds)} />}
-        <title>{title === "llm-garage" ? title : `${title} · llm-garage`}</title>
+        {refreshSeconds && (
+          <meta http-equiv="refresh" content={String(refreshSeconds)} />
+        )}
+        <title>
+          {title === "llm-garage" ? title : `${title} · llm-garage`}
+        </title>
         <style>{styles}</style>
       </head>
       <body>

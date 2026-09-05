@@ -7,7 +7,9 @@ test("seeds repositories and every prototype session state", async () => {
   const store = new MemoryDataStore();
 
   assert.equal((await store.listRepos()).length, 3);
-  const statuses = new Set((await store.listSessions()).map(({ status }) => status));
+  const statuses = new Set(
+    (await store.listSessions()).map(({ status }) => status),
+  );
   for (const status of [
     "running",
     "awaiting_feedback",
@@ -48,12 +50,16 @@ test("simulates initial and feedback turns, then archives the session", async ()
 
   assert.equal(session.status, "running");
   await delay(35);
-  assert.equal((await store.getSession(session.id))?.status, "awaiting_feedback");
+  assert.equal(
+    (await store.getSession(session.id))?.status,
+    "awaiting_feedback",
+  );
   const [initialTurn] = await store.listTurns(session.id);
   assert.equal(initialTurn?.status, "succeeded");
   assert.equal(
-    (await store.listRunEvents(initialTurn!.id)).filter(({ kind }) => kind === "log")
-      .length,
+    (await store.listRunEvents(initialTurn!.id)).filter(
+      ({ kind }) => kind === "log",
+    ).length,
     3,
   );
 
@@ -61,7 +67,10 @@ test("simulates initial and feedback turns, then archives the session", async ()
   assert.equal((await store.listTurns(session.id)).length, 2);
   assert.equal((await store.getSession(session.id))?.status, "running");
   await delay(35);
-  assert.equal((await store.getSession(session.id))?.status, "awaiting_feedback");
+  assert.equal(
+    (await store.getSession(session.id))?.status,
+    "awaiting_feedback",
+  );
 
   assert.equal(await store.archiveSession(session.id), true);
   assert.equal((await store.getSession(session.id))?.status, "archived");
