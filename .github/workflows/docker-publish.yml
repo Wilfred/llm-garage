@@ -1,7 +1,7 @@
-name: Build and publish Docker image
+name: CI and publish Docker image
 
 # Builds the Dockerfile and publishes the image to the GitHub Container
-# Registry (GHCR) so it can be deployed. See PLAN.md M0.
+# Registry (GHCR) so it can be deployed.
 #
 # Pull the published image with:
 #   docker pull ghcr.io/wilfred/llm-garage:latest
@@ -9,7 +9,7 @@ name: Build and publish Docker image
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -24,7 +24,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
   build-and-push:
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       contents: read

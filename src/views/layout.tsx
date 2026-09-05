@@ -1,15 +1,18 @@
-import type { PropsWithChildren } from "@kitajs/html";
+import type { ComponentChildren } from "preact";
 
 export function Layout({
   title = "llm-garage",
   children,
-}: PropsWithChildren<{ title?: string }>) {
+}: {
+  title?: string;
+  children?: ComponentChildren;
+}) {
   return (
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title safe>{title}</title>
+        <title>{title}</title>
         <style>{`
           :root { color-scheme: light dark; }
           body {

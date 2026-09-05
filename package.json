@@ -7,8 +7,8 @@
     "dev": "tsx watch src/server/index.ts",
     "build": "tsc",
     "start": "node dist/server/index.js",
-    "lint": "eslint . && npm run xss-scan",
-    "xss-scan": "xss-scan",
+    "lint": "eslint .",
+    "test": "node --import tsx --test \"src/**/*.test.{ts,tsx}\"",
     "format": "prettier --write ."
   },
   "repository": {
@@ -18,14 +18,14 @@
   "author": "Wilfred Hughes",
   "license": "MIT",
   "dependencies": {
-    "@kitajs/html": "^4.2.13",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "preact": "^10.29.8",
+    "preact-render-to-string": "^6.7.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@kitajs/ts-html-plugin": "^4.1.4",
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.0",
     "eslint": "^10.6.0",
