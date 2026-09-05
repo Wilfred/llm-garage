@@ -3,6 +3,13 @@
 Always do your work in a git worktree so you don't dirty the current
 checkout.
 
+## Pull Requests
+
+For implementation work, take ownership of delivery: commit the changes,
+push the branch, and open a pull request once validation passes unless the
+user asks you not to. If a pull request already exists, update it instead of
+creating another one.
+
 ## Commit Style
 
 A single short line in the imperative is the whole commit message
