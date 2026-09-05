@@ -1,0 +1,328 @@
+import type { Repo, RunEvent, Session, Turn } from "../../store/types";
+import { formatDate, StatusBadge } from "../components";
+import { Layout } from "../layout";
+
+export function NewSessionPage({
+  repos,
+  sessions,
+  initialPreview,
+  error,
+}: {
+  repos: Repo[];
+  sessions: Session[];
+  initialPreview: string;
+  error?: string;
+}) {
+  return (
+    <Layout title="New session" section="sessions" scripts={["/assets/new-session.js"]}>
+      <div class="page-header">
+        <div>
+          <div class="eyebrow">New work</div>
+          <h1>Start a session</h1>
+          <p>
+            Choose the repository and instructions. The preview is the exact system prompt
+            snapshot the runner will receive.
+          </p>
+        </div>
+      </div>
+      {error && <div class="notice">{error}</div>}
+      {repos.length === 0 ? (
+        <div class="empty">
+          Add a repository before starting a session.{" "}
+          <a href="/repos">Go to repositories</a>.
+        </div>
+      ) : (
+        <form id="new-session-form" class="split" method="post" action="/sessions">
+          <section class="card stack">
+            <div class="field-row">
+              <label>
+                Repository
+                <select id="repo-id" name="repoId" required>
+                  {repos.map((repo) => (
+                    <option value={repo.id}>
+                      {repo.owner}/{repo.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Runner
+                <select name="runner">
+                  <option value="codex">Codex</option>
+                  <option value="echo">Echo (test)</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              Session title
+              <input name="title" required placeholder="Improve the settings workflow" />
+            </label>
+            <label>
+              Task for the agent
+              <textarea
+                name="taskPrompt"
+                required
+                placeholder="Describe the outcome you want…"
+              />
+            </label>
+            <label>
+              Extra system instructions{" "}
+              <span class="help">Added after the base and repository prompts.</span>
+              <textarea
+                id="system-prompt-extra"
+                name="systemPromptExtra"
+                placeholder="For this session only…"
+              />
+            </label>
+            <label>
+              Parent session{" "}
+              <span class="help">
+                Optional: make this session part of an existing work tree.
+              </span>
+              <select name="parentId">
+                <option value="">No parent</option>
+                {sessions
+                  .filter(({ status }) => status !== "archived")
+                  .map((session) => (
+                    <option value={session.id}>{session.title}</option>
+                  ))}
+              </select>
+            </label>
+            <fieldset>
+              <legend>After the run</legend>
+              <div class="check-row">
+                <label class="check">
+                  <input
+                    id="create-pr"
+                    type="checkbox"
+                    name="createPr"
+                    value="yes"
+                    checked
+                  />{" "}
+                  Create a pull request
+                </label>
+                <label class="check">
+                  <input id="auto-merge" type="checkbox" name="autoMerge" value="yes" />{" "}
+                  Auto-merge when CI passes
+                </label>
+              </div>
+            </fieldset>
+            <button class="button button-primary" type="submit">
+              Start prototype run
+            </button>
+          </section>
+          <aside class="card sticky">
+            <h2>Composed prompt preview</h2>
+            <p class="muted small">
+              Updates as you change the repository or extra instructions.
+            </p>
+            <textarea id="composed-preview" class="mono preview" readOnly>
+              {initialPreview}
+            </textarea>
+          </aside>
+        </form>
+      )}
+    </Layout>
+  );
+}
+
+export type TurnTranscript = { turn: Turn; events: RunEvent[] };
+
+export function SessionDetailPage({
+  session,
+  repo,
+  breadcrumb,
+  tree,
+  transcript,
+}: {
+  session: Session;
+  repo?: Repo;
+  breadcrumb: Session[];
+  tree: Session[];
+  transcript: TurnTranscript[];
+}) {
+  const canFeedback =
+    session.status !== "running" &&
+    session.status !== "queued" &&
+    session.status !== "archived";
+  const canCancel = session.status === "running" || session.status === "queued";
+  return (
+    <Layout
+      title={session.title}
+      section="sessions"
+      refreshSeconds={canCancel ? 1 : undefined}
+    >
+      <div class="breadcrumb">
+        <a href="/">Dashboard</a>
+        <span>/</span>
+        {breadcrumb.map((item, index) => (
+          <>
+            {index > 0 && <span>/</span>}
+            {item.id === session.id ? (
+              <strong>{item.title}</strong>
+            ) : (
+              <a href={`/sessions/${item.id}`}>{item.title}</a>
+            )}
+          </>
+        ))}
+      </div>
+      <div class="page-header">
+        <div>
+          <StatusBadge status={session.status} />
+          <h1>{session.title}</h1>
+          <p>
+            {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"} ·{" "}
+            {session.runner} runner · started {formatDate(session.createdAt)}
+          </p>
+        </div>
+        <div class="actions">
+          {canCancel && (
+            <form method="post" action={`/sessions/${session.id}/cancel`}>
+              <button class="button button-danger" type="submit">
+                Cancel run
+              </button>
+            </form>
+          )}
+          {session.status !== "archived" && (
+            <form method="post" action={`/sessions/${session.id}/archive`}>
+              <button class="button" type="submit">
+                Archive
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+      <div class="split">
+        <section class="transcript">
+          <div class="section-heading">
+            <h2>Transcript</h2>
+            <span class="count">Refresh to see the prototype run advance</span>
+          </div>
+          {transcript.map(({ turn, events }, index) => (
+            <article class="card">
+              <div class="turn-header">
+                <div>
+                  <strong>Turn {index + 1}</strong>{" "}
+                  <span class="muted small">· {turn.kind}</span>
+                </div>
+                <span class="muted small">{turn.status}</span>
+              </div>
+              <p class="turn-prompt">{turn.prompt}</p>
+              <pre class="log">
+                {events
+                  .map(
+                    (event) =>
+                      `${event.ts.toLocaleTimeString("en-GB")}  [${event.kind}] ${event.data}`,
+                  )
+                  .join("\n") || "No output yet."}
+              </pre>
+            </article>
+          ))}
+          {canFeedback && (
+            <section class="card">
+              <h2>Send feedback</h2>
+              <form
+                class="stack"
+                method="post"
+                action={`/sessions/${session.id}/feedback`}
+              >
+                <label>
+                  Continue this session
+                  <textarea
+                    name="feedback"
+                    required
+                    placeholder="Ask for a revision or the next step…"
+                  />
+                </label>
+                <button class="button button-primary" type="submit">
+                  Start feedback turn
+                </button>
+              </form>
+            </section>
+          )}
+        </section>
+        <aside class="stack sticky">
+          <section class="card">
+            <h2>Session tree</h2>
+            <SessionTree sessions={tree} currentId={session.id} />
+          </section>
+          <section class="card">
+            <h2>Pull request</h2>
+            {session.prUrl ? (
+              <a href={session.prUrl}>Open pull request</a>
+            ) : (
+              <p class="muted small">
+                {session.createPr
+                  ? "A pull request will appear here after a real runner completes."
+                  : "Pull-request creation is off for this session."}
+              </p>
+            )}
+            {session.autoMerge && <p class="muted small">Auto-merge is enabled.</p>}
+          </section>
+          <section class="card">
+            <h2>What the agent saw</h2>
+            <details>
+              <summary>Show composed system prompt</summary>
+              <pre class="log">
+                {session.composedSystemPrompt || "No system prompt was composed."}
+              </pre>
+            </details>
+          </section>
+        </aside>
+      </div>
+    </Layout>
+  );
+}
+
+function SessionTree({
+  sessions,
+  currentId,
+}: {
+  sessions: Session[];
+  currentId: string;
+}) {
+  const roots = sessions.filter(
+    ({ parentId }) => !parentId || !sessions.some(({ id }) => id === parentId),
+  );
+  const renderNodes = (nodes: Session[]) => (
+    <ul class="tree">
+      {nodes.map((node) => {
+        const children = sessions.filter(({ parentId }) => parentId === node.id);
+        return (
+          <li>
+            <a href={`/sessions/${node.id}`}>
+              <span>
+                {node.id === currentId ? "› " : ""}
+                {node.title}
+              </span>
+              <span class="muted">{node.status.replaceAll("_", " ")}</span>
+            </a>
+            {children.length > 0 && renderNodes(children)}
+          </li>
+        );
+      })}
+    </ul>
+  );
+  return renderNodes(roots);
+}
+
+export function NotFoundPage({
+  message = "That page does not exist.",
+}: {
+  message?: string;
+}) {
+  return (
+    <Layout title="Not found">
+      <div class="page-header">
+        <div>
+          <div class="eyebrow">404</div>
+          <h1>Not found</h1>
+          <p>{message}</p>
+        </div>
+      </div>
+      <a class="button" href="/">
+        Back to dashboard
+      </a>
+    </Layout>
+  );
+}

@@ -11,7 +11,10 @@ as a concurrent tree**: an agent can spawn subagent sessions and hand each back
 for independent human feedback, with several sessions making progress in parallel
 while you review others.
 
-**Status: early.** See [PLAN.md](PLAN.md) for the full design and milestone roadmap.
+**Status: clickable prototype.** The dashboard, repository and versioned-prompt
+workflows, and multi-turn session flow are available now. Runs are scripted fixtures;
+Docker agents and GitHub integration arrive in later milestones. See [PLAN.md](PLAN.md)
+for the full design and milestone roadmap.
 
 ## Stack
 
@@ -33,8 +36,10 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 - `npm test` — unit tests
 - `npm run format` — prettier
 
-Application data is stored in `DATA_DIR/app.db` (`data/app.db` by default). The
-SQLite database uses WAL mode and is created automatically on first startup.
+The prototype's repositories, prompts, and sessions live in memory and reset whenever
+the server restarts. SQLite is initialized at `DATA_DIR/app.db` (`data/app.db` by
+default) for the health check; subsequent milestones move each prototype workflow to
+persistent storage.
 
 ## Docker
 
