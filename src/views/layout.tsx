@@ -154,6 +154,11 @@ const styles = `
   th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; background: var(--surface); }
   td { font-size: .9rem; }
   tr:last-child td { border-bottom: 0; }
+  .repo-name { color: var(--text); font-weight: 650; }
+  .repo-stats h2 { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .65rem; }
+  .stat-value { color: var(--text); font-size: 1.7rem; font-weight: 700; line-height: 1; }
+  a.stat-value { color: var(--blue); }
+  .repo-created { margin-top: 1rem; }
   .split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .7fr); gap: 1.25rem; align-items: start; }
   .sticky { position: sticky; top: 92px; }
   .breadcrumb { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; color: var(--muted); font-size: .82rem; margin-bottom: 1.4rem; }

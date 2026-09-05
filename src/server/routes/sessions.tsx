@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { DataStore, RunnerName, Session } from "../../store/types";
+import type { DataStore, Repo, RunnerName, Session } from "../../store/types";
 import {
   NewSessionPage,
   NotFoundPage,
@@ -8,27 +8,51 @@ import {
   type TurnTranscript,
 } from "../../views/pages/sessions";
 import { renderPage } from "../../views/render";
-import { formField } from "./forms";
+import { formField, queryString } from "./forms";
 
 export function createSessionsRouter(store: DataStore): Router {
   const router = Router();
 
-  router.get("/sessions", async (_req, res) => {
+  router.get("/sessions", async (req, res) => {
     const [repos, sessions] = await Promise.all([
       store.listRepos(),
       store.listSessions(),
     ]);
-    res.type("html").send(renderPage(<SessionsPage repos={repos} sessions={sessions} />));
+    const repoId = queryString(req.query.repoId);
+    const { selectedRepo, visibleSessions } = filterSessionsByRepo(
+      repos,
+      sessions,
+      repoId,
+    );
+    res
+      .type("html")
+      .send(
+        renderPage(
+          <SessionsPage
+            repos={repos}
+            sessions={visibleSessions}
+            selectedRepo={selectedRepo}
+          />,
+        ),
+      );
   });
 
-  router.get("/sessions/new", async (_req, res) => {
+  router.get("/sessions/new", async (req, res) => {
     const [repos, sessions] = await Promise.all([
       store.listRepos(),
       store.listSessions(),
     ]);
     res
       .type("html")
-      .send(renderPage(<NewSessionPage repos={repos} sessions={sessions} />));
+      .send(
+        renderPage(
+          <NewSessionPage
+            repos={repos}
+            sessions={sessions}
+            selectedRepoId={queryString(req.query.repoId)}
+          />,
+        ),
+      );
   });
 
   router.post("/sessions", async (req, res) => {
@@ -50,6 +74,7 @@ export function createSessionsRouter(store: DataStore): Router {
             <NewSessionPage
               repos={repos}
               sessions={sessions}
+              selectedRepoId={repoId}
               error="Repository, title, and task are required."
             />,
           ),
@@ -124,6 +149,22 @@ export function createSessionsRouter(store: DataStore): Router {
   });
 
   return router;
+}
+
+export function filterSessionsByRepo(
+  repos: Repo[],
+  sessions: Session[],
+  repoId?: string,
+): { selectedRepo?: Repo; visibleSessions: Session[] } {
+  const selectedRepo = repoId
+    ? repos.find((candidate) => candidate.id === repoId)
+    : undefined;
+  return {
+    selectedRepo,
+    visibleSessions: selectedRepo
+      ? sessions.filter((session) => session.repoId === selectedRepo.id)
+      : sessions,
+  };
 }
 
 function buildBreadcrumb(session: Session, sessions: Session[]): Session[] {
