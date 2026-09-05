@@ -128,7 +128,7 @@ export class MemoryDataStore implements DataStore {
   async listRunEvents(turnId: string): Promise<RunEvent[]> {
     return [...this.events.values()]
       .filter((event) => event.turnId === turnId)
-      .sort((left, right) => left.ts.getTime() - right.ts.getTime());
+      .sort((left, right) => left.sequence - right.sequence);
   }
 
   async addFeedback(sessionId: string, feedback: string): Promise<Turn> {
@@ -267,9 +267,20 @@ export class MemoryDataStore implements DataStore {
     data: string,
     ts?: Date,
   ): void {
+    const turn = this.turns.get(turnId);
+    if (!turn) throw new Error("Turn not found");
+    const sequence =
+      Math.max(
+        0,
+        ...[...this.events.values()]
+          .filter((event) => event.sessionId === turn.sessionId)
+          .map((event) => event.sequence),
+      ) + 1;
     const event: RunEvent = {
       id: this.id("event"),
+      sessionId: turn.sessionId,
       turnId,
+      sequence,
       kind,
       data,
       ts: ts ?? this.now(),

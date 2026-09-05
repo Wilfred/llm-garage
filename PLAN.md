@@ -64,13 +64,12 @@ Milestones M1-M3 are complete. The repository currently provides:
 
 - an Express 5 application rendered with Preact and JSX;
 - dashboard, repository, session, about, and new-session screens;
-- a repository catalogue persisted in SQLite;
-- in-memory session and event data used by the clickable prototype;
+- repository and session catalogues persisted in SQLite;
+- durable turns and ordered session events used by the clickable prototype;
 - linting, unit and route tests, a production build, and a web-app Docker image.
 
-It does not yet persist sessions or events, run coding agents, manage Docker
-sandbox containers, interact with GitHub, calculate model costs, or execute
-comparisons.
+It does not yet run coding agents, manage Docker sandbox containers, interact
+with GitHub, calculate model costs, or execute comparisons.
 
 ## Architecture
 
@@ -132,71 +131,40 @@ when requested. It has its own durable state transitions and retry policy.
 
 ## Domain model
 
-The schema should use UUIDs for externally referenced records and UTC timestamps.
-Structured provider data is retained as redacted JSON only when it is useful for
-debugging or future presentation.
+The TypeORM entities in `src/entities` are the authoritative database schema;
+field lists are not duplicated here. Externally referenced records use UUIDs and
+timestamps are stored in UTC. Structured provider data is retained as redacted
+JSON only when it is useful for debugging or future presentation.
 
 ### Repository
 
-- ID, owner, and repository name
-- canonical clone URL and GitHub repository ID
-- created and updated timestamps
-
-The default branch is fetched when preparing a session rather than displayed as
-core catalogue information. The exact resolved base commit is stored on the
-session.
+The repository catalogue identifies the GitHub project selected for a session.
+GitHub metadata needed for checkout will be added to its entity when repository
+resolution is implemented.
 
 ### Session
 
-- ID, repository ID, task prompt, and optional title
-- selected model ID and a snapshot of agent/model/request configuration
-- exact base commit SHA, generated branch name, and workspace identifier
-- execution status: `queued`, `running`, `succeeded`, `failed`, `cancelled`, or
-  `archived`
-- delivery mode: `none`, `pull_request`, or `auto_merge`
-- delivery status: `not_requested`, `pending`, `pushing`, `pr_created`,
-  `awaiting_checks`, `merging`, `merged`, or `failed`
-- timestamps for creation, start, finish, cancellation, and archival
-- final summary, output excerpt, diff statistics, and error details
-- input, cached-input, cache-write, output, and reasoning token counts when
-  reported
-- elapsed milliseconds, cost in integer micro-US-dollars, and cost source:
-  `provider_reported`, `estimated`, or `unknown`
-- pull-request number, URL, head SHA, merge SHA, and delivery error
-- visibility: `private` or `public`, plus publication timestamp
-- optional comparison ID
-- optional parent session ID and root session ID
-
-Unknown usage or cost data stays explicitly unknown; it is never represented as
-zero. OpenRouter's response usage is the preferred source for tokens and charged
-cost. Any estimate is labelled as such and uses a snapshotted price configuration.
+Sessions own durable turns and an append-only event ledger. Derived session
+fields keep list pages efficient, while status changes and their events are
+committed together. Unknown usage or cost stays explicitly unknown rather than
+being represented as zero; estimates are labelled and use snapshotted pricing.
 
 ### Session event
 
-- session ID and monotonically increasing sequence number
-- kind: `status`, `log`, `tool`, `model_output`, `usage`, or `system`
-- timestamp and redacted structured payload
-
-Events are append-only. Derived session fields make list pages efficient, while
-the event ledger remains the authoritative execution history. Writes that change
-status append an event in the same transaction.
+Events have a stable, session-wide order so they can later back resumable live
+updates. Provider and tool payloads must be redacted before they reach this
+ledger.
 
 ### Comparison
 
-- ID, repository ID, task prompt, and exact base commit SHA
-- created timestamp and completion status
-- winning session ID and optional feedback note
-- two to four member sessions
-
-All members are created in one transaction with the same repository, prompt, and
-base commit. They receive independent workspaces and branches. Model choice is
-the intended variable; the UI should call out any other configuration difference.
+A comparison groups two to four sessions created from the same repository,
+prompt, and base commit. Its entity will be added with the comparison milestone;
+membership remains distinct from parent/child lineage.
 
 ### Setting
 
-Encrypted or environment-provided credentials remain outside ordinary product
-records. A small settings table can hold non-secret operator preferences such as
-default concurrency and merge method.
+Settings contain only non-secret operator preferences. Encrypted or
+environment-provided credentials remain outside ordinary product records.
 
 ## Principal flows
 

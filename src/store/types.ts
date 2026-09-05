@@ -49,7 +49,9 @@ export type Turn = {
 
 export type RunEvent = {
   id: string;
+  sessionId: string;
   turnId: string;
+  sequence: number;
   kind: "log" | "model_output" | "status" | "system" | "tool" | "usage";
   data: string;
   ts: Date;
