@@ -1,0 +1,37 @@
+{
+  "name": "llm-garage",
+  "version": "0.1.0",
+  "description": "Self-hosted harness for LLM coding agents: prompt + repo in, sandboxed agent run + PR out",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/server/index.ts",
+    "build": "tsc",
+    "start": "node dist/server/index.js",
+    "lint": "eslint . && npm run xss-scan",
+    "xss-scan": "xss-scan",
+    "format": "prettier --write ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wilfred/llm-garage.git"
+  },
+  "author": "Wilfred Hughes",
+  "license": "MIT",
+  "dependencies": {
+    "@kitajs/html": "^4.2.13",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@kitajs/ts-html-plugin": "^4.1.4",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.0",
+    "eslint": "^10.6.0",
+    "prettier": "^3.9.4",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.62.1"
+  }
+}
