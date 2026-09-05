@@ -1,25 +1,41 @@
-# llm-garage
+# LLM Garage
 
-A self-hosted harness for LLM coding agents. Give it a prompt and a GitHub
-repository, and it runs a coding agent in an isolated Docker sandbox that
-iterates on the code, then (optionally) opens a pull request and (optionally)
-auto-merges it once CI is green.
+This is a website that lets you run agentic coding sessions against
+different models. It's intended for both real work and to A/B test
+models to build intuition of their abilities.
 
-It treats **agent sessions as a concurrent tree**: an agent can spawn subagent sessions
-and hand each back for independent human feedback, with several sessions making
-progress in parallel while you review others.
+Ultimately it spawns agentic sessions on the current host using
+Docker.
+
+## Target Feature Set
+
+(1) Create a pull request for a given GitHub repository, prompt and
+model, similar to Claude Code Web or
+[OpenHands](https://github.com/All-Hands-AI/OpenHands).
+
+(2) Session tracking: For each session, full metadata of prompts,
+output, tool usage, token usage, time taken and cost. Allow sessions
+to be marked public to show to others.
+
+(3) Session feedback: mark which session you think had the best
+result, so you can generate a summary of which model is best for your
+use cases.
+
+(4) Side-by-side sessions: Allow multiple linked sessions to start
+with the same prompt, to make A/B testing models easy.
+
+(5) Drive-by sessions: Allow a session to create a pull request that
+is auto-merged if CI is green.
+
+(6) Forked sessions: Allow a session to create new sessions, so an
+issue identified in one session can be spun out to another session to
+enable the user to iterate on it. This enables workflows for larger
+features or bugs that can't be a shortlived subagent.
 
 **Status: clickable prototype.** The dashboard, repository workflow, and multi-turn
 session flow are available now. Runs are scripted fixtures; Docker agents and GitHub
 integration arrive in later milestones. See [PLAN.md](PLAN.md) for the full design and
 milestone roadmap.
-
-## Stack
-
-Express 5 · server-rendered JSX (Preact) · TypeORM + SQLite · dockerode ·
-octokit · `p-queue`. TypeScript throughout, packaged in Docker. The agent engine
-sits behind a pluggable `Runner` interface (v1: OpenAI Codex CLI); Claude-based
-runners can be added later.
 
 ## Development
 
@@ -47,35 +63,3 @@ docker run --rm -p 3000:3000 -v llm-garage-data:/app/data llm-garage
 
 From M6 onward the container also needs the Docker socket to spawn sandbox
 containers: `-v /var/run/docker.sock:/var/run/docker.sock`.
-
-## Influences & similar projects
-
-llm-garage is a personal take on ideas explored by a wave of agentic coding
-tools. These shaped the design or serve as useful points of comparison:
-
-- **[Claude Code](https://github.com/anthropics/claude-code)** (Anthropic) — the
-  agent-in-a-loop CLI, and the closest reference for how a coding agent drives a
-  repo. Its [web/cloud sessions](https://code.claude.com/docs/en/claude-code-on-the-web)
-  are the model for running agents in ephemeral cloud sandboxes with PR automation.
-- **[Cursor](https://cursor.com)** — its Background / Cloud Agents run tasks in
-  cloud VMs and open PRs; a reference for fire-and-forget, parallel agent runs.
-- **[OpenHands](https://github.com/All-Hands-AI/OpenHands)** (All Hands AI,
-  formerly OpenDevin) — the closest open-source analog: a sandboxed runtime, a
-  model-agnostic agent, microagents for per-repo tailoring, and a GitHub issue
-  resolver. A candidate to wrap behind the `Runner` interface rather than
-  reimplement its agent + sandbox.
-- **[OpenAI Codex CLI](https://github.com/openai/codex)** — the v1 agent engine
-  driven behind llm-garage's pluggable `Runner`.
-- **[Aider](https://aider.chat)** — terminal pair-programmer with git-native,
-  commit-shaped edits; an influence on keeping agent changes reviewable.
-- **[SWE-agent](https://github.com/SWE-agent/SWE-agent)** (Princeton NLP) —
-  research on the agent–computer interface and automated issue fixing (SWE-bench).
-- **[Devin](https://devin.ai)** (Cognition) — the original "autonomous AI
-  software engineer" framing.
-- **[GitHub Copilot coding agent](https://github.com/features/copilot)** —
-  issue → PR automation from the incumbent.
-
-What llm-garage does that most of these don't: treat **sessions as a tree the
-agent itself manages** (spawn subagents, finish yourself, let a human iterate on each
-leaf), make **auto-merge on green CI** a first-class toggle, and swap the whole **agent
-engine** (not just the model) behind one `Runner` interface.
