@@ -5,10 +5,12 @@ import { Layout } from "../layout";
 export function NewSessionPage({
   repos,
   sessions,
+  selectedRepoId,
   error,
 }: {
   repos: Repo[];
   sessions: Session[];
+  selectedRepoId?: string;
   error?: string;
 }) {
   return (
@@ -31,7 +33,7 @@ export function NewSessionPage({
               Repository
               <select name="repoId" required>
                 {repos.map((repo) => (
-                  <option value={repo.id}>
+                  <option value={repo.id} selected={repo.id === selectedRepoId}>
                     {repo.owner}/{repo.name}
                   </option>
                 ))}
@@ -241,15 +243,26 @@ export function SessionDetailPage({
 export function SessionsPage({
   repos,
   sessions,
+  selectedRepo,
 }: {
   repos: Repo[];
   sessions: Session[];
+  selectedRepo?: Repo;
 }) {
   return (
     <Layout title="Sessions" section="sessions">
       <div class="page-header">
         <div>
           <h1>Sessions</h1>
+          {selectedRepo && (
+            <p>
+              Showing sessions for{" "}
+              <a href={`/repos/${selectedRepo.id}`}>
+                {selectedRepo.owner}/{selectedRepo.name}
+              </a>
+              . <a href="/sessions">Clear filter</a>
+            </p>
+          )}
         </div>
       </div>
       <SessionCards sessions={sessions} repos={repos} />
