@@ -1,10 +1,10 @@
 # Plan: llm-garage — Self-hosted LLM Coding Harness
 
-> **This document is the source of truth for building llm-garage.** It is written to be
-> self-contained: any engineer or coding agent should be able to pick up the next
-> unfinished milestone and execute it using only this file and the existing code.
-> Work in milestone order. Verify each milestone's "Definition of done" before starting
-> the next. Commit and push at every milestone boundary.
+> **This document is the source of truth for the remaining llm-garage work.** It is
+> written to be self-contained: any engineer or coding agent should be able to pick up
+> the next milestone and execute it using only this file and the existing code. Work in
+> milestone order. Verify each milestone's "Definition of done" before starting the
+> next. Commit and push at every milestone boundary.
 
 ## Context
 
@@ -19,14 +19,13 @@ optionally opens a PR and optionally auto-merges it when CI is green. Core goals
    spawn subagent sessions and end itself, leaving individual sessions awaiting human
    feedback so the human can iterate on each independently — and several can be making
    progress in parallel while the human reviews others.
-3. **Incremental delivery**: the first deployed version is an utterly trivial Node
-   website packaged in Docker. Every milestone after that is independently deployable
-   and verified end-to-end before the next begins.
+3. **Incremental delivery**: every milestone is independently deployable and verified
+   end-to-end before the next begins.
 
 **Decisions already made (do not relitigate):**
 
 - Agent engine: **pluggable `Runner` interface; v1 = OpenAI Codex CLI** (`codex exec`
-  inside the sandbox container). Claude-based runners can be added later.
+  inside the sandbox container). Additional runners can be added later.
 - Sandbox: **Docker containers** via `dockerode` — fresh container per agent turn.
 - Frontend: **server-rendered JSX** from Express (`@kitajs/html`), minimal client JS,
   SSE for live logs. No SPA.
@@ -35,14 +34,12 @@ optionally opens a PR and optionally auto-merges it when CI is green. Core goals
 
 ## Execution notes for future sessions
 
-- **The Claude Code cloud environment has no Docker daemon.** Milestones that need
-  `docker build`/`docker run` (M0 image verification, M6+) can be *authored* anywhere,
-  but must be *verified* on a host with Docker (Wilfred's machine/server). Structure
-  work so everything docker-independent is verified in-session, and print the exact
-  commands the human should run to verify the docker parts.
-- Develop on branch `claude/llm-github-automation-harness-6ags0z` until told otherwise.
+- Milestones that use containers must be verified on a host with Docker. If Docker is
+  unavailable, verify everything Docker-independent and provide the exact remaining
+  verification commands.
 - Never commit `node_modules/`, `data/`, `dist/`, or `.env`.
-- Keep this file updated: when a milestone is completed, mark it `✅ done (commit <sha>)`.
+- Keep this file focused on remaining work: remove completed milestone sections and
+  update any cross-references or assumptions they leave behind.
 
 ## Architecture overview
 
@@ -84,7 +81,7 @@ tsconfig: `jsx: "react-jsx"`, `jsxImportSource: "@kitajs/html"`,
 ## Directory layout (final shape — grows milestone by milestone)
 
 ```
-Dockerfile                    # the harness app image (M0: trivial; M1+: multi-stage TS build)
+Dockerfile                    # multi-stage TypeScript harness app image
 .dockerignore
 sandbox/Dockerfile            # agent sandbox image: git + node + codex CLI + git-askpass + garage-ctl
 data/                         # sqlite file (gitignored)
@@ -338,44 +335,9 @@ engine-agnostic — any runner that can shell out can use it.
 
 Each milestone lists **Build** and **Definition of done** (verification). Do not start
 milestone N+1 until N's definition of done has been demonstrated. Commit + push at each
-boundary. Mark milestones done in this file as you go.
+boundary, then remove the completed milestone from this document.
 
-### M0 — Utterly trivial Node website, packaged in Docker ✅ done (merged, PR #1)
-
-> The trivial `server.mjs` + `Dockerfile` are replaced by the TypeScript app in M1.
-
-**The first deployed artifact.** No TypeScript, no dependencies, no framework.
-
-**Build:** `server.mjs` at the repo root using only `node:http` — serves a one-line
-HTML page at `/` and `{"ok":true}` at `/healthz`; reads `PORT` (default 3000) and
-`HOST` (default 0.0.0.0). Plus `Dockerfile` (`node:22-bookworm-slim`, non-root `node`
-user, `CMD ["node","server.mjs"]`) and `.dockerignore`.
-
-**Definition of done:**
-- In any environment: `node server.mjs &` then `curl -s localhost:3000/healthz` →
-  `{"ok":true}` and `curl -s localhost:3000/` returns HTML.
-- On a Docker host: `docker build -t llm-garage . && docker run --rm -p 3000:3000
-  llm-garage` then the same curls. **Deploy this before continuing.**
-
-### M1 — TypeScript + Express + JSX skeleton ✅ done (this PR)
-
-**Build:** full scaffolding (package.json scripts `dev/build/start/lint/format`,
-tsconfig per above, eslint flat config, prettier, `.env.example`, `.gitignore`);
-Express 5 app; kitajs `layout.tsx` + home page; `/healthz` returning `{ok:true}` (no DB
-yet). Delete `server.mjs`. Evolve `Dockerfile` into a multi-stage build
-(deps → `tsc` build → slim runtime running `node dist/server/index.js`).
-
-**Definition of done:** `npm run lint` clean; `npm run dev` + curls of `/` and
-`/healthz`; `npm run build && npm start` + same curls; on a Docker host,
-`docker build` + `docker run` + same curls.
-
-### M2 — TypeORM + SQLite wired 🔜 built, ships in the next PR
-
-> Built and verified (dev + compiled `node dist/` serve `/healthz` → `{"ok":true,"db":true}`,
-> `data/app.db` with WAL); ships as the follow-up PR after M1 merges. Adds
-> `src/db/data-source.ts`, the `Setting` entity, the DB deps (better-sqlite3, typeorm,
-> reflect-metadata), the `/healthz` db check, and the data-dir volume in the Dockerfile.
-> Note: TypeScript pinned to 5.9 (kitajs ts-html-plugin peer requires ^5.9.3, not TS 6).
+### M2 — TypeORM + SQLite wired
 
 **Build:** `src/db/data-source.ts` (better-sqlite3, WAL, `synchronize: true`, db file at
 `${DATA_DIR}/app.db`), `Setting` entity, healthz extended to `{ok:true, db:true}` via a
@@ -384,9 +346,6 @@ the data dir as a volume and document `-v llm-garage-data:/app/data`.
 
 **Definition of done:** healthz reports `db:true`; `data/app.db` created on first run;
 restart keeps data; build + start (non-dev) also works.
-
-> Note: M1+M2 were built together by the initial scaffolding session — that is fine;
-> verify both definitions of done, then mark both.
 
 ### M3 — Clickable UI prototype (dummy backend)
 
@@ -412,7 +371,7 @@ real backend later drops in underneath the same views without rewriting them.
   server run; state resets on restart (documented, expected). "Running" a session is
   faked: on submit it appends a few scripted log lines over ~2s and flips to
   `awaiting_feedback` — enough to feel the loop without SSE/Docker/agents.
-- **No Docker, no TypeORM writes, no GitHub, no real agent.** The M2 `Setting`/DB stays
+- **No Docker, no TypeORM writes, no GitHub, no real agent.** The M2 `Setting`/DB remains
   wired only for `/healthz`; all prototype data lives in the store.
 - **Keep the seam honest:** views import only `DataStore`. Later milestones implement
   `DataStore` over TypeORM + real orchestration and delete the in-memory impl — the
@@ -561,25 +520,22 @@ session outside its tree.
 
 1. **Codex CLI flags/auth in-container** — highest uncertainty; spiked at the start of
    M7; EchoRunner keeps the pipeline verifiable regardless.
-2. **No Docker in the cloud dev environment** — M0 image, M6, M7, M9, M10, M12, M13
-   need final verification on a Docker host; author + unit-verify everything else
-   in-session and hand the human exact verification commands.
-3. **`codex exec resume` semantics** (M12) — verify resume actually replays context in
+2. **`codex exec resume` semantics** (M12) — verify resume actually replays context in
    the pinned codex version; fallback: prepend a transcript summary to the next turn's
    task prompt.
-4. **Linux `host-gateway` support** (M13) — needs Docker ≥ 20.10; fallback to the
+3. **Linux `host-gateway` support** (M13) — needs Docker ≥ 20.10; fallback to the
    bridge gateway IP from `dockerode`'s network inspect.
-5. **kitajs escaping discipline** — mitigated by `xss-scan` in lint.
-6. **tsx + decorator metadata** — mitigated by explicit column types everywhere.
-7. **`synchronize: true` drift** — acceptable; migrations documented as exit ramp; the
+4. **kitajs escaping discipline** — mitigated by `xss-scan` in lint.
+5. **tsx + decorator metadata** — mitigated by explicit column types everywhere.
+6. **`synchronize: true` drift** — acceptable; migrations documented as exit ramp; the
    M12 remodel may drop dev data (acceptable, note it in the commit message).
-8. **Zero-CI repos in auto-merge** — "no checks after 3 polls = green" rule; revisit.
-9. **Open container egress in v1** — documented hardening item.
-10. **Host resource exhaustion from concurrency** — N concurrent 2GB containers can
+7. **Zero-CI repos in auto-merge** — "no checks after 3 polls = green" rule; revisit.
+8. **Open container egress in v1** — documented hardening item.
+9. **Host resource exhaustion from concurrency** — N concurrent 2GB containers can
     OOM the host. Mitigated by the `MAX_CONCURRENT_RUNS × SANDBOX_MEMORY_MB` budget
     check on startup and hard per-container limits; the queue caps in-flight turns
     regardless of how many sessions exist.
-11. **Event-loop stalls under many chatty concurrent turns** — synchronous SQLite
+10. **Event-loop stalls under many chatty concurrent turns** — synchronous SQLite
     writes × N high-log turns; mitigated by batching RunEvent inserts (~250ms flush).
 
 ## Critical files
