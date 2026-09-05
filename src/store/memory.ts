@@ -9,8 +9,9 @@ import type {
   Turn,
 } from "./types";
 import { getModel } from "../models";
+import { RepoAlreadyExistsError } from "./errors";
 
-type MemoryStoreOptions = {
+export type MemoryStoreOptions = {
   seed?: boolean;
   simulationStepMs?: number;
 };
@@ -45,6 +46,13 @@ export class MemoryDataStore implements DataStore {
   }
 
   async createRepo(input: CreateRepoInput): Promise<Repo> {
+    if (
+      [...this.repos.values()].some(
+        (repo) => repo.owner === input.owner && repo.name === input.name,
+      )
+    ) {
+      throw new RepoAlreadyExistsError(input.owner, input.name);
+    }
     const repo: Repo = { id: this.id("repo"), ...input, createdAt: this.now() };
     this.repos.set(repo.id, repo);
     return repo;
@@ -52,10 +60,7 @@ export class MemoryDataStore implements DataStore {
 
   async deleteRepo(id: string): Promise<DeleteRepoResult> {
     if (!this.repos.has(id)) return "not_found";
-    const inUse = [...this.sessions.values()].some(
-      (session) => session.repoId === id,
-    );
-    if (inUse) return "in_use";
+    if (this.repoIsInUse(id)) return "in_use";
     this.repos.delete(id);
     return "deleted";
   }
@@ -71,7 +76,8 @@ export class MemoryDataStore implements DataStore {
   }
 
   async createSession(input: CreateSessionInput): Promise<Session> {
-    if (!this.repos.has(input.repoId)) throw new Error("Repository not found");
+    if (!(await this.getRepo(input.repoId)))
+      throw new Error("Repository not found");
     const parent = input.parentId
       ? this.sessions.get(input.parentId)
       : undefined;
@@ -270,6 +276,10 @@ export class MemoryDataStore implements DataStore {
   private now(): Date {
     this.lastTimestamp = Math.max(Date.now(), this.lastTimestamp + 1);
     return new Date(this.lastTimestamp);
+  }
+
+  protected repoIsInUse(id: string): boolean {
+    return [...this.sessions.values()].some((session) => session.repoId === id);
   }
 
   private seed(): void {

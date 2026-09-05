@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { RepoAlreadyExistsError } from "../../store/errors";
 import type { DataStore } from "../../store/types";
 import {
   NewRepoPage,
@@ -49,7 +50,16 @@ export function createReposRouter(store: DataStore): Router {
         );
       return;
     }
-    await store.createRepo({ owner, name, defaultBranch });
+    try {
+      await store.createRepo({ owner, name, defaultBranch });
+    } catch (error) {
+      if (!(error instanceof RepoAlreadyExistsError)) throw error;
+      res
+        .status(409)
+        .type("html")
+        .send(renderPage(<NewRepoPage error={error.message} />));
+      return;
+    }
     res.redirect(303, noticeUrl("/repos", `Added ${owner}/${name}.`));
   });
 

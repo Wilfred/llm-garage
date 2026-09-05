@@ -50,16 +50,24 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 - `npm test` — unit tests
 - `npm run format` — prettier
 
-Prototype repositories and sessions live in memory and reset whenever the server
-restarts. SQLite is initialized at `DATA_DIR/app.db` (`data/app.db` by default) for the
-health check; subsequent milestones move prototype workflows to persistent storage.
+Repositories are stored in SQLite at `DATA_DIR/app.db` (`data/app.db` by default) and
+survive restarts. Prototype sessions still live in memory and reset whenever the server
+restarts; subsequent M4 work moves them to persistent storage.
 
 ## Docker
 
 ```sh
 docker build -t llm-garage .
-docker run --rm -p 3000:3000 -v llm-garage-data:/app/data llm-garage
+docker volume create llm-garage-data
+docker run -d --name llm-garage --restart unless-stopped \
+  -p 3000:3000 \
+  --mount source=llm-garage-data,target=/app/data \
+  llm-garage
 ```
+
+The named volume is required: it stores the SQLite database outside the container so
+repository data survives container replacement. Reuse `llm-garage-data` when deploying
+a new image, and include that volume in host backups.
 
 From M6 onward the container also needs the Docker socket to spawn sandbox
 containers: `-v /var/run/docker.sock:/var/run/docker.sock`.
