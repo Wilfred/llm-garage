@@ -338,46 +338,9 @@ Each milestone lists **Build** and **Definition of done** (verification). Do not
 milestone N+1 until N's definition of done has been demonstrated. Commit + push at each
 boundary, then remove the completed milestone from this document.
 
-### M3 — Clickable UI prototype (dummy backend)
-
-**Purpose:** let Wilfred play with the whole intended UX — navigation, forms, the
-session flow — and react to it *before* the entity/DB/orchestration design is locked in.
-Everything is driven by in-memory fixtures behind a swappable data-access seam, so the
-real backend later drops in underneath the same views without rewriting them.
-
-**Build:**
-- **`DataStore` interface** — the seam every route/view depends on (list/get/create
-  repos, prompts + versions, sessions + turns + events). Ship an **in-memory
-  implementation** seeded with fixtures: a few repos; a couple of system prompts each
-  with 2–3 versions; several sessions spanning every status (`running`,
-  `awaiting_feedback`, `succeeded`, `failed`, `archived`) arranged in a small parent/
-  child tree; canned log lines per turn.
-- **All pages, navigable end-to-end**, rendered with Preact SSR: dashboard
-  (**active list** + awaiting-feedback inbox + recent sessions), repos list/add/delete,
-  prompts list/edit/version-history + base-prompt setting, new-session form (runner
-  select, `createPr`/`autoMerge` toggles, live composed-prompt preview), session detail
-  (tree breadcrumb, transcript/log `<pre>`, feedback form, cancel/archive buttons, PR
-  link placeholder).
-- **Forms mutate the in-memory store** (POST-redirect-GET) so it feels live within a
-  server run; state resets on restart (documented, expected). "Running" a session is
-  faked: on submit it appends a few scripted log lines over ~2s and flips to
-  `awaiting_feedback` — enough to feel the loop without SSE/Docker/agents.
-- **No Docker, no TypeORM writes, no GitHub, no real agent.** The database-backed
-  `Setting` entity remains wired only for `/healthz`; all prototype data lives in the
-  store.
-- **Keep the seam honest:** views import only `DataStore`. Later milestones implement
-  `DataStore` over TypeORM + real orchestration and delete the in-memory impl — the
-  fixtures are throwaway, the interface and views are not.
-
-**Definition of done:** in a browser, click through every page; add/delete a repo; edit
-a prompt and see a new version; start a session from the form and watch it move to
-`awaiting_feedback` with canned logs; send feedback (adds a turn); archive it; every nav
-link resolves; `npm run lint` clean. Deployable via Docker so Wilfred can host it and
-play. **This is the checkpoint to critique the UX before backend work (M4+) begins.**
-
 ### M4 — Repos CRUD
 
-> Implements the repos slice of `DataStore` over TypeORM (replacing fixtures); the M3
+> Implements the repos slice of `DataStore` over TypeORM (replacing fixtures); the
 > views are reused unchanged.
 
 **Build:** `Repo` entity; `/repos` list page, add form (owner, name, defaultBranch),

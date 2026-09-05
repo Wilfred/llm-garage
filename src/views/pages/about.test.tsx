@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderPage } from "../render";
 import { AboutPage, formatDuration } from "./about";
-import { HomePage } from "./home";
+import { DashboardPage } from "./dashboard";
 
 test("formats uptime as a concise duration", () => {
   assert.equal(formatDuration(0), "0 seconds");
@@ -30,8 +30,8 @@ test("renders build and runtime information", () => {
   assert.match(html, /2 days, 3 hours/);
 });
 
-test("links to the about page from the homepage", () => {
-  const html = renderPage(<HomePage />);
+test("links to the about page from the dashboard", () => {
+  const html = renderPage(<DashboardPage repos={[]} sessions={[]} />);
 
   assert.match(html, /href="\/about"/);
 });

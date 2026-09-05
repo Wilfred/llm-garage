@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { createAppDataSource } from "../db/data-source";
+import { MemoryDataStore } from "../store/memory";
 import { createApp } from "./app";
 import type { Express } from "express";
 import type { Server } from "node:http";
@@ -8,7 +9,7 @@ const dataSource = createAppDataSource(config.DATA_DIR);
 
 async function main(): Promise<void> {
   await dataSource.initialize();
-  const app = createApp(dataSource);
+  const app = createApp(dataSource, new MemoryDataStore());
 
   let server: Server;
   try {
