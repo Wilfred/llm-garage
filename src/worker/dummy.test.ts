@@ -3,7 +3,7 @@ import test from "node:test";
 import { DummyWorker } from "./dummy";
 import type { WorkerEvent } from "./types";
 
-test("emits a short model and tool conversation before completing", async () => {
+void test("emits a short model and tool conversation before completing", async () => {
   const events: WorkerEvent[] = [];
   const worker = new DummyWorker({ stepDelayMs: 1 });
 
@@ -28,11 +28,15 @@ test("emits a short model and tool conversation before completing", async () => 
       "model_output",
     ],
   );
-  assert.match(events[0]!.data, /Improve the example/);
-  assert.match(events.at(-1)!.data, /Test Model finished/);
+  const firstEvent = events[0];
+  const lastEvent = events.at(-1);
+  assert.ok(firstEvent);
+  assert.ok(lastEvent);
+  assert.match(firstEvent.data, /Improve the example/);
+  assert.match(lastEvent.data, /Test Model finished/);
 });
 
-test("stops without emitting more events when cancelled", async () => {
+void test("stops without emitting more events when cancelled", async () => {
   const controller = new AbortController();
   const events: WorkerEvent[] = [];
   const worker = new DummyWorker({ stepDelayMs: 50 });
