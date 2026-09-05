@@ -8,6 +8,7 @@ import type {
   Session,
   Turn,
 } from "./types";
+import { getModel } from "../models";
 
 type MemoryStoreOptions = {
   seed?: boolean;
@@ -84,7 +85,7 @@ export class MemoryDataStore implements DataStore {
       repoId: input.repoId,
       title: input.title,
       status: "running",
-      runner: input.runner,
+      modelId: input.modelId,
       taskPrompt: input.taskPrompt,
       createPr: input.createPr,
       autoMerge: input.autoMerge,
@@ -181,7 +182,15 @@ export class MemoryDataStore implements DataStore {
   }
 
   private simulateTurn(sessionId: string, turnId: string): void {
-    this.addEvent(turnId, "status", "Prototype runner started");
+    const session = this.sessions.get(sessionId);
+    const model = session ? getModel(session.modelId) : undefined;
+    this.addEvent(
+      turnId,
+      "status",
+      model
+        ? `${model.name} agent started via OpenRouter`
+        : "Prototype agent started",
+    );
     const lines = [
       "Preparing an isolated workspace…",
       "Reading the repository and task…",
@@ -361,7 +370,9 @@ export class MemoryDataStore implements DataStore {
       this.addEvent(
         turn.id,
         "status",
-        status === "running" ? "Runner is working" : `Turn ${status}`,
+        status === "running"
+          ? `${getModel(session.modelId).name} is working via OpenRouter`
+          : `Session ${status}`,
         session.createdAt,
       );
       this.addEvent(
@@ -396,7 +407,12 @@ export class MemoryDataStore implements DataStore {
       repoId,
       title,
       status,
-      runner: id === "session-docs" ? "echo" : "codex",
+      modelId:
+        id === "session-docs"
+          ? "google/gemini-3.1-pro-preview"
+          : id === "session-parser"
+            ? "anthropic/claude-sonnet-4.5"
+            : "openai/gpt-5.2",
       taskPrompt: title,
       createPr: id !== "session-parser",
       autoMerge: id === "session-tests",

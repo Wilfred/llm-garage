@@ -1,3 +1,5 @@
+import type { ModelId } from "../models";
+
 export type Repo = {
   id: string;
   owner: string;
@@ -15,8 +17,6 @@ export type SessionStatus =
   | "cancelled"
   | "archived";
 
-export type RunnerName = "echo" | "codex";
-
 export type Session = {
   id: string;
   parentId?: string;
@@ -24,7 +24,7 @@ export type Session = {
   repoId: string;
   title: string;
   status: SessionStatus;
-  runner: RunnerName;
+  modelId: ModelId;
   taskPrompt: string;
   createPr: boolean;
   autoMerge: boolean;
@@ -61,7 +61,7 @@ export type CreateSessionInput = {
   repoId: string;
   parentId?: string;
   title: string;
-  runner: RunnerName;
+  modelId: ModelId;
   taskPrompt: string;
   createPr: boolean;
   autoMerge: boolean;

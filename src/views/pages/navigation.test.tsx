@@ -128,4 +128,23 @@ test("new-session form has no prompt-library controls", async () => {
   assert.doesNotMatch(html, /system prompt/i);
   assert.doesNotMatch(html, /composed prompt/i);
   assert.doesNotMatch(html, /systemPromptExtra/);
+  assert.doesNotMatch(html, />Runner</);
+  assert.doesNotMatch(html, /Codex/);
+  assert.match(html, />Model</);
+  assert.match(html, /Run through OpenRouter/);
+  assert.match(html, /value="openai\/gpt-5\.2"/);
+  assert.match(html, /value="anthropic\/claude-sonnet-4\.5"/);
+  assert.match(html, /value="google\/gemini-3\.1-pro-preview"/);
+});
+
+test("identifies each session's model and OpenRouter gateway", async () => {
+  const store = new MemoryDataStore();
+  const repos = await store.listRepos();
+  const sessions = await store.listSessions();
+  const html = renderPage(<SessionsPage repos={repos} sessions={sessions} />);
+
+  assert.match(html, /GPT-5\.2 via OpenRouter/);
+  assert.match(html, /Claude Sonnet 4\.5 via OpenRouter/);
+  assert.match(html, /Gemini 3\.1 Pro Preview via OpenRouter/);
+  assert.doesNotMatch(html, /codex runner/i);
 });

@@ -42,7 +42,7 @@ test("simulates initial and feedback turns, then archives the session", async ()
   const session = await store.createSession({
     repoId: repo.id,
     title: "Try the workflow",
-    runner: "echo",
+    modelId: "google/gemini-3.1-pro-preview",
     taskPrompt: "Make a small change",
     createPr: true,
     autoMerge: false,
@@ -86,7 +86,7 @@ test("cancels a running prototype turn without later changing its state", async 
   const session = await store.createSession({
     repoId: repo.id,
     title: "Cancel me",
-    runner: "codex",
+    modelId: "openai/gpt-5.2",
     taskPrompt: "Wait",
     createPr: false,
     autoMerge: false,
