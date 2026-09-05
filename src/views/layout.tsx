@@ -1,11 +1,11 @@
 import type { ComponentChildren } from "preact";
 
-export type NavigationSection = "dashboard" | "repos" | "prompts" | "sessions" | "about";
+export type NavigationSection = "dashboard" | "repos" | "sessions" | "about";
 
 const navItems: Array<{ href: string; label: string; section: NavigationSection }> = [
   { href: "/", label: "Dashboard", section: "dashboard" },
   { href: "/repos", label: "Repositories", section: "repos" },
-  { href: "/prompts", label: "Prompts", section: "prompts" },
+  { href: "/sessions", label: "Sessions", section: "sessions" },
   { href: "/about", label: "About", section: "about" },
 ];
 
@@ -13,13 +13,11 @@ export function Layout({
   title = "llm-garage",
   section,
   children,
-  scripts = [],
   refreshSeconds,
 }: {
   title?: string;
   section?: NavigationSection;
   children?: ComponentChildren;
-  scripts?: string[];
   refreshSeconds?: number;
 }) {
   return (
@@ -31,14 +29,13 @@ export function Layout({
         {refreshSeconds && <meta http-equiv="refresh" content={String(refreshSeconds)} />}
         <title>{title === "llm-garage" ? title : `${title} · llm-garage`}</title>
         <style>{styles}</style>
-        {scripts.map((src) => (
-          <script src={src} defer />
-        ))}
       </head>
       <body>
         <header class="site-header">
           <a class="brand" href="/" aria-label="llm-garage dashboard">
-            <span class="brand-mark">lg</span>
+            <span class="brand-mark" aria-hidden="true">
+              🛠️
+            </span>
             <span>llm-garage</span>
           </a>
           <nav aria-label="Primary navigation">
@@ -93,7 +90,7 @@ const styles = `
   }
   .brand { color: var(--text); display: flex; align-items: center; gap: .7rem; font-weight: 700; letter-spacing: -.02em; }
   .brand:hover { text-decoration: none; }
-  .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: 800 .72rem ui-monospace, monospace; }
+  .brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--accent); font-size: 1rem; }
   nav { display: flex; align-items: center; gap: .35rem; }
   nav a { color: var(--muted); padding: .45rem .7rem; border-radius: 7px; font-size: .92rem; }
   nav a:hover, nav a[aria-current="page"] { color: var(--text); background: var(--surface-raised); text-decoration: none; }
@@ -138,11 +135,11 @@ const styles = `
   .button:disabled { opacity: .45; cursor: not-allowed; }
   .actions { display: flex; gap: .55rem; flex-wrap: wrap; align-items: center; }
   form.stack, .stack { display: grid; gap: 1rem; }
+  .form-card { max-width: 820px; }
   label, legend { font-weight: 650; font-size: .88rem; }
   label span.help { display: block; color: var(--muted); font-weight: 400; font-size: .8rem; margin-top: .15rem; }
   input, select, textarea { width: 100%; margin-top: .4rem; border: 1px solid var(--line-strong); border-radius: 8px; background: #0f1115; color: var(--text); padding: .68rem .75rem; font: inherit; }
   textarea { min-height: 125px; resize: vertical; line-height: 1.5; }
-  textarea.preview { min-height: 270px; color: #c9d0da; }
   input:focus, select:focus, textarea:focus { outline: 2px solid #7bb7ff88; outline-offset: 1px; border-color: var(--blue); }
   .field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
   .check-row { display: flex; gap: 1.4rem; flex-wrap: wrap; }
@@ -165,12 +162,11 @@ const styles = `
   .turn-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .8rem; }
   .turn-prompt { border-left: 2px solid var(--blue); padding-left: .85rem; color: #dce1e8; white-space: pre-wrap; }
   pre.log { background: #090a0c; color: #c3cad4; border: 1px solid #252932; border-radius: 8px; padding: .85rem; overflow-x: auto; font-size: .78rem; line-height: 1.7; white-space: pre-wrap; }
-  details { border-top: 1px solid var(--line); padding-top: .8rem; }
-  summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
-  .version { border-left: 2px solid var(--line-strong); padding-left: 1rem; }
-  .version-current { border-left-color: var(--accent); }
-  .version pre { white-space: pre-wrap; color: #d6dae0; }
   .empty { color: var(--muted); border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: 1.5rem; text-align: center; }
+  .repo-list { list-style: none; margin: 0; padding: 0; }
+  .repo-list li { padding: .75rem 0; border-bottom: 1px solid var(--line); }
+  .repo-list li:first-child { padding-top: 0; }
+  .repo-list li:last-child { padding-bottom: 0; border-bottom: 0; }
   .tree { list-style: none; padding-left: 0; margin: 0; }
   .tree .tree { margin: .45rem 0 0 .8rem; padding-left: .9rem; border-left: 1px solid var(--line-strong); }
   .tree li + li { margin-top: .45rem; }

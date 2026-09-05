@@ -5,16 +5,14 @@ repository, and it runs a coding agent in an isolated Docker sandbox that
 iterates on the code, then (optionally) opens a pull request and (optionally)
 auto-merges it once CI is green.
 
-It's built to be **tailored to your own workflow over time** — especially through
-a versioned, composable library of system prompts — and to treat **agent sessions
-as a concurrent tree**: an agent can spawn subagent sessions and hand each back
-for independent human feedback, with several sessions making progress in parallel
-while you review others.
+It treats **agent sessions as a concurrent tree**: an agent can spawn subagent sessions
+and hand each back for independent human feedback, with several sessions making
+progress in parallel while you review others.
 
-**Status: clickable prototype.** The dashboard, repository and versioned-prompt
-workflows, and multi-turn session flow are available now. Runs are scripted fixtures;
-Docker agents and GitHub integration arrive in later milestones. See [PLAN.md](PLAN.md)
-for the full design and milestone roadmap.
+**Status: clickable prototype.** The dashboard, repository workflow, and multi-turn
+session flow are available now. Runs are scripted fixtures; Docker agents and GitHub
+integration arrive in later milestones. See [PLAN.md](PLAN.md) for the full design and
+milestone roadmap.
 
 ## Stack
 
@@ -36,10 +34,9 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 - `npm test` — unit tests
 - `npm run format` — prettier
 
-The prototype's repositories, prompts, and sessions live in memory and reset whenever
-the server restarts. SQLite is initialized at `DATA_DIR/app.db` (`data/app.db` by
-default) for the health check; subsequent milestones move each prototype workflow to
-persistent storage.
+Prototype repositories and sessions live in memory and reset whenever the server
+restarts. SQLite is initialized at `DATA_DIR/app.db` (`data/app.db` by default) for the
+health check; subsequent milestones move prototype workflows to persistent storage.
 
 ## Docker
 
@@ -79,7 +76,6 @@ tools. These shaped the design or serve as useful points of comparison:
   issue → PR automation from the incumbent.
 
 What llm-garage does that most of these don't: treat **sessions as a tree the
-agent itself manages** (spawn subagents, finish yourself, let a human iterate on
-each leaf), keep a **versioned system-prompt library** composed per run, make
-**auto-merge on green CI** a first-class toggle, and swap the whole **agent engine**
-(not just the model) behind one `Runner` interface.
+agent itself manages** (spawn subagents, finish yourself, let a human iterate on each
+leaf), make **auto-merge on green CI** a first-class toggle, and swap the whole **agent
+engine** (not just the model) behind one `Runner` interface.
