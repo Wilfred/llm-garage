@@ -1,4 +1,5 @@
 import type { Repo, RunEvent, Session, Turn } from "../../store/types";
+import { getModel, modelCatalog } from "../../models";
 import { formatDate, SessionCards, StatusBadge } from "../components";
 import { Layout } from "../layout";
 
@@ -40,10 +41,14 @@ export function NewSessionPage({
               </select>
             </label>
             <label>
-              Runner
-              <select name="runner">
-                <option value="codex">Codex</option>
-                <option value="echo">Echo (test)</option>
+              Model
+              <span class="help">Run through OpenRouter</span>
+              <select name="modelId" required>
+                {modelCatalog.map((model) => (
+                  <option value={model.id}>
+                    {model.name} · {model.provider}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -102,7 +107,7 @@ export function NewSessionPage({
             </div>
           </fieldset>
           <button class="button button-primary" type="submit">
-            Start prototype run
+            Start prototype session
           </button>
         </form>
       )}
@@ -125,6 +130,7 @@ export function SessionDetailPage({
   tree: Session[];
   transcript: TurnTranscript[];
 }) {
+  const model = getModel(session.modelId);
   const canFeedback =
     session.status !== "running" &&
     session.status !== "queued" &&
@@ -156,7 +162,8 @@ export function SessionDetailPage({
           <h1>{session.title}</h1>
           <p>
             {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"} ·{" "}
-            {session.runner} runner · started {formatDate(session.createdAt)}
+            {model.name} via OpenRouter · started{" "}
+            {formatDate(session.createdAt)}
           </p>
         </div>
         <div class="actions">
@@ -237,7 +244,7 @@ export function SessionDetailPage({
             ) : (
               <p class="muted small">
                 {session.createPr
-                  ? "A pull request will appear here after a real runner completes."
+                  ? "A pull request will appear here after a real agent completes."
                   : "Pull-request creation is off for this session."}
               </p>
             )}

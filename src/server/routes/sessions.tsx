@@ -1,5 +1,6 @@
 import { Router } from "express";
-import type { DataStore, Repo, RunnerName, Session } from "../../store/types";
+import { isModelId } from "../../models";
+import type { DataStore, Repo, Session } from "../../store/types";
 import {
   NewSessionPage,
   NotFoundPage,
@@ -59,9 +60,8 @@ export function createSessionsRouter(store: DataStore): Router {
     const repoId = formField(req.body, "repoId");
     const title = formField(req.body, "title");
     const taskPrompt = formField(req.body, "taskPrompt");
-    const runnerValue = formField(req.body, "runner");
-    const runner: RunnerName = runnerValue === "echo" ? "echo" : "codex";
-    if (!repoId || !title || !taskPrompt) {
+    const modelId = formField(req.body, "modelId");
+    if (!repoId || !title || !taskPrompt || !isModelId(modelId)) {
       const [repos, sessions] = await Promise.all([
         store.listRepos(),
         store.listSessions(),
@@ -75,7 +75,7 @@ export function createSessionsRouter(store: DataStore): Router {
               repos={repos}
               sessions={sessions}
               selectedRepoId={repoId}
-              error="Repository, title, and task are required."
+              error="Repository, model, title, and task are required."
             />,
           ),
         );
@@ -86,7 +86,7 @@ export function createSessionsRouter(store: DataStore): Router {
       parentId: formField(req.body, "parentId") || undefined,
       title,
       taskPrompt,
-      runner,
+      modelId,
       createPr:
         formField(req.body, "createPr") === "yes" ||
         formField(req.body, "autoMerge") === "yes",

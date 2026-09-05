@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import type { Repo, Session, SessionStatus } from "../store/types";
+import { getModel } from "../models";
 
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -30,6 +31,7 @@ export function SessionCards({
     <div class="grid grid-3">
       {sessions.map((session) => {
         const repo = repos.find((candidate) => candidate.id === session.repoId);
+        const model = getModel(session.modelId);
         return (
           <a class="card card-link" href={`/sessions/${session.id}`}>
             <StatusBadge status={session.status} />
@@ -38,6 +40,7 @@ export function SessionCards({
               <span>
                 {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"}
               </span>
+              <span>{model.name} via OpenRouter</span>
               <time dateTime={session.updatedAt.toISOString()}>
                 {formatDate(session.updatedAt)}
               </time>
