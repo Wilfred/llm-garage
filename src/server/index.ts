@@ -1,6 +1,8 @@
 import { config } from "../config";
 import { createAppDataSource } from "../db/data-source";
 import { createApp } from "./app";
+import type { Express } from "express";
+import type { Server } from "node:http";
 
 const dataSource = createAppDataSource(config.DATA_DIR);
 
@@ -8,8 +10,67 @@ async function main(): Promise<void> {
   await dataSource.initialize();
   const app = createApp(dataSource);
 
-  app.listen(config.PORT, config.HOST, () => {
-    console.log(`llm-garage listening on http://${config.HOST}:${config.PORT}`);
+  let server: Server;
+  try {
+    server = await listen(app, config.PORT, config.HOST);
+  } catch (error) {
+    await dataSource.destroy();
+    throw error;
+  }
+
+  console.log(`llm-garage listening on http://${config.HOST}:${config.PORT}`);
+  installShutdownHandlers(server);
+}
+
+function listen(app: Express, port: number, host: string): Promise<Server> {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port, host, (error?: Error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve(server);
+    });
+  });
+}
+
+function installShutdownHandlers(server: Server): void {
+  let shuttingDown = false;
+
+  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
+    console.log(`Received ${signal}; shutting down llm-garage`);
+
+    try {
+      await close(server);
+      if (dataSource.isInitialized) {
+        await dataSource.destroy();
+      }
+    } catch (error) {
+      console.error("Failed to shut down llm-garage cleanly", error);
+      process.exitCode = 1;
+    }
+  };
+
+  process.once("SIGINT", () => void shutdown("SIGINT"));
+  process.once("SIGTERM", () => void shutdown("SIGTERM"));
+}
+
+function close(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
   });
 }
 
