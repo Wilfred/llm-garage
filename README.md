@@ -30,7 +30,7 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 
 - `npm run build && npm start` — compiled production run
 - `npm run lint` — eslint
-- `npm test` — unit tests, including default HTML-escaping coverage
+- `npm test` — unit tests
 - `npm run format` — prettier
 
 Application data is stored in `DATA_DIR/app.db` (`data/app.db` by default). The
