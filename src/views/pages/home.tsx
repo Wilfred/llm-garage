@@ -5,7 +5,7 @@ export function HomePage() {
     <Layout title="llm-garage">
       <h1>llm-garage is running</h1>
       <p>
-        M1 skeleton: Express 5 with server-rendered JSX via <code>@kitajs/html</code>.
+        Express 5 with server-rendered JSX via <code>preact-render-to-string</code>.
         Persistence (TypeORM + SQLite) arrives in M2.
       </p>
       <p>

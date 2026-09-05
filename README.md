@@ -15,7 +15,7 @@ while you review others.
 
 ## Stack
 
-Express 5 · server-rendered JSX (`@kitajs/html`) · TypeORM + SQLite · dockerode ·
+Express 5 · server-rendered JSX (Preact) · TypeORM + SQLite · dockerode ·
 octokit · `p-queue`. TypeScript throughout, packaged in Docker. The agent engine
 sits behind a pluggable `Runner` interface (v1: OpenAI Codex CLI); Claude-based
 runners can be added later.
@@ -29,7 +29,8 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 ```
 
 - `npm run build && npm start` — compiled production run
-- `npm run lint` — eslint + kitajs XSS scan
+- `npm run lint` — eslint
+- `npm test` — unit tests, including default HTML-escaping coverage
 - `npm run format` — prettier
 
 ## Docker

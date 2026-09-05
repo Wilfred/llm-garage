@@ -27,7 +27,7 @@ optionally opens a PR and optionally auto-merges it when CI is green. Core goals
 - Agent engine: **pluggable `Runner` interface; v1 = OpenAI Codex CLI** (`codex exec`
   inside the sandbox container). Additional runners can be added later.
 - Sandbox: **Docker containers** via `dockerode` — fresh container per agent turn.
-- Frontend: **server-rendered JSX** from Express (`@kitajs/html`), minimal client JS,
+- Frontend: **server-rendered Preact JSX** from Express (`preact-render-to-string`), minimal client JS,
   SSE for live logs. No SPA.
 - DB: **SQLite via TypeORM** (`better-sqlite3`); GitHub via **PAT** in env + `octokit`.
 - The harness website itself is **packaged in Docker** for deployment.
@@ -62,7 +62,7 @@ When the harness itself runs in Docker (production), it needs
 
 | Concern | Choice | Notes |
 |---|---|---|
-| JSX | `@kitajs/html` | Renders JSX straight to HTML strings — no React runtime/hydration. **Caveat: no auto-escaping**; use `safe`/`Html.escape` for user data and wire `@kitajs/ts-html-plugin` `xss-scan` into the lint script. |
+| JSX | Preact + `preact-render-to-string` | Renders JSX to HTML strings with dynamic text and attributes escaped by default. No client runtime or hydration; raw HTML requires the explicit `dangerouslySetInnerHTML` escape hatch. |
 | Server | Express 5 | SSE via raw `res.write`. |
 | DB | TypeORM + `better-sqlite3`, WAL mode | `synchronize: true` is fine for this single-user tool; migrations are the documented exit ramp if the data ever becomes precious. |
 | Docker | `dockerode` | Per-`exec` env vars are the linchpin of token isolation (see sandbox section). |
@@ -73,7 +73,7 @@ When the harness itself runs in Docker (production), it needs
 | Lint | typescript-eslint (flat) + prettier | |
 | IDs | `nanoid` | Session/turn IDs, branch slugs, agent API tokens. |
 
-tsconfig: `jsx: "react-jsx"`, `jsxImportSource: "@kitajs/html"`,
+tsconfig: `jsx: "react-jsx"`, `jsxImportSource: "preact"`,
 `experimentalDecorators: true`, `module`/`moduleResolution` `nodenext`, `strict: true`,
 `outDir: "dist"`. Pick one module strategy that works for both `tsx` (dev) and
 `node dist/` (prod) and verify both actually run.
@@ -94,7 +94,7 @@ src/
   store/db.ts                 # TypeORM-backed impl (M4+)
   server/index.ts             # bootstrap: init DB, mount routes, listen
   server/routes/              # health.ts, pages.tsx, repos.ts, prompts.ts, sessions.ts, sse.ts, agent-api.ts
-  views/                      # layout.tsx + pages/*.tsx (kitajs)
+  views/                      # layout.tsx + pages/*.tsx (Preact SSR)
   runner/types.ts             # Runner interface
   runner/echo.ts              # trivial test runner (no LLM)
   runner/codex.ts             # CodexRunner (v1)
@@ -322,7 +322,8 @@ engine-agnostic — any runner that can shell out can use it.
 
 - Secrets only in process env + per-exec docker env; never in DB rows or views;
   redaction pass on log lines before persistence.
-- kitajs escaping enforced by `xss-scan` in the lint script.
+- Dynamic JSX text and attributes escaped by default; raw HTML requires an explicit
+  `dangerouslySetInnerHTML` use and must never receive unsanitized input.
 - Non-root container user, resource limits, fresh container per turn, label-based
   reaping of containers and volumes.
 - App binds `127.0.0.1` by default (env `HOST`); the agent API binds the docker bridge
@@ -361,7 +362,7 @@ real backend later drops in underneath the same views without rewriting them.
   with 2–3 versions; several sessions spanning every status (`running`,
   `awaiting_feedback`, `succeeded`, `failed`, `archived`) arranged in a small parent/
   child tree; canned log lines per turn.
-- **All pages, navigable end-to-end**, rendered with kitajs (escaped): dashboard
+- **All pages, navigable end-to-end**, rendered with Preact SSR: dashboard
   (**active list** + awaiting-feedback inbox + recent sessions), repos list/add/delete,
   prompts list/edit/version-history + base-prompt setting, new-session form (runner
   select, `createPr`/`autoMerge` toggles, live composed-prompt preview), session detail
@@ -389,10 +390,10 @@ play. **This is the checkpoint to critique the UX before backend work (M4+) begi
 > views are reused unchanged.
 
 **Build:** `Repo` entity; `/repos` list page, add form (owner, name, defaultBranch),
-delete button. Plain HTML forms, POST-redirect-GET, kitajs views, escaped output.
+delete button. Plain HTML forms, POST-redirect-GET, Preact SSR views.
 
 **Definition of done:** add/delete a repo in the browser; data survives restart;
-`npm run lint` (incl. xss-scan) clean.
+`npm run lint` clean.
 
 ### M5 — Prompt library with versioning
 
@@ -525,17 +526,16 @@ session outside its tree.
    task prompt.
 3. **Linux `host-gateway` support** (M13) — needs Docker ≥ 20.10; fallback to the
    bridge gateway IP from `dockerode`'s network inspect.
-4. **kitajs escaping discipline** — mitigated by `xss-scan` in lint.
-5. **tsx + decorator metadata** — mitigated by explicit column types everywhere.
-6. **`synchronize: true` drift** — acceptable; migrations documented as exit ramp; the
+4. **tsx + decorator metadata** — mitigated by explicit column types everywhere.
+5. **`synchronize: true` drift** — acceptable; migrations documented as exit ramp; the
    M12 remodel may drop dev data (acceptable, note it in the commit message).
-7. **Zero-CI repos in auto-merge** — "no checks after 3 polls = green" rule; revisit.
-8. **Open container egress in v1** — documented hardening item.
-9. **Host resource exhaustion from concurrency** — N concurrent 2GB containers can
+6. **Zero-CI repos in auto-merge** — "no checks after 3 polls = green" rule; revisit.
+7. **Open container egress in v1** — documented hardening item.
+8. **Host resource exhaustion from concurrency** — N concurrent 2GB containers can
     OOM the host. Mitigated by the `MAX_CONCURRENT_RUNS × SANDBOX_MEMORY_MB` budget
     check on startup and hard per-container limits; the queue caps in-flight turns
     regardless of how many sessions exist.
-10. **Event-loop stalls under many chatty concurrent turns** — synchronous SQLite
+9. **Event-loop stalls under many chatty concurrent turns** — synchronous SQLite
     writes × N high-log turns; mitigated by batching RunEvent inserts (~250ms flush).
 
 ## Critical files

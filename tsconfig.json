@@ -5,7 +5,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "jsx": "react-jsx",
-    "jsxImportSource": "@kitajs/html",
+    "jsxImportSource": "preact",
     "experimentalDecorators": true,
     "strict": true,
     "esModuleInterop": true,
