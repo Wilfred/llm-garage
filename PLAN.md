@@ -64,12 +64,13 @@ Milestones M1-M3 are complete. The repository currently provides:
 
 - an Express 5 application rendered with Preact and JSX;
 - dashboard, repository, session, about, and new-session screens;
-- in-memory repository, session, and event data used by the clickable prototype;
-- a SQLite connection used by the health check;
+- a repository catalogue persisted in SQLite;
+- in-memory session and event data used by the clickable prototype;
 - linting, unit and route tests, a production build, and a web-app Docker image.
 
-It does not yet persist product data, run coding agents, manage Docker sandbox
-containers, interact with GitHub, calculate model costs, or execute comparisons.
+It does not yet persist sessions or events, run coding agents, manage Docker
+sandbox containers, interact with GitHub, calculate model costs, or execute
+comparisons.
 
 ## Architecture
 
