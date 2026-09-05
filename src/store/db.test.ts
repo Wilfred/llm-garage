@@ -87,20 +87,17 @@ void test("persists sessions, turns, and ordered events across restarts", async 
     createPr: false,
     autoMerge: false,
   });
-  assert.equal(
-    (await store.listRunEvents((await store.listTurns(session.id))[0]!.id))
-      .length,
-    1,
-  );
+  const [runningTurn] = await store.listTurns(session.id);
+  assert.ok(runningTurn);
+  assert.equal((await store.listRunEvents(runningTurn.id)).length, 1);
   await waitForStatus(store, session.id, "succeeded");
 
   const [initialTurn] = await store.listTurns(session.id);
   assert.equal((await store.getSession(session.id))?.status, "succeeded");
   assert.equal(initialTurn?.status, "succeeded");
+  assert.ok(initialTurn);
   assert.deepEqual(
-    (await store.listRunEvents(initialTurn!.id)).map(
-      ({ sequence }) => sequence,
-    ),
+    (await store.listRunEvents(initialTurn.id)).map(({ sequence }) => sequence),
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   );
 
@@ -133,7 +130,7 @@ void test("persists sessions, turns, and ordered events across restarts", async 
   assert.equal(await restartedStore.deleteRepo(repo.id), "in_use");
 });
 
-test("commits cancellation state and its event together", async (t) => {
+void test("commits cancellation state and its event together", async (t) => {
   const dataDir = await mkdtemp(
     path.join(os.tmpdir(), "llm-garage-session-cancel-"),
   );
@@ -167,13 +164,14 @@ test("commits cancellation state and its event together", async (t) => {
   const [turn] = await store.listTurns(session.id);
   assert.equal((await store.getSession(session.id))?.status, "cancelled");
   assert.equal(turn?.status, "cancelled");
+  assert.ok(turn);
   assert.deepEqual(
-    (await store.listRunEvents(turn!.id)).map(({ data }) => data),
+    (await store.listRunEvents(turn.id)).map(({ data }) => data),
     ["GPT-5.6 Sol dummy worker started", "Session cancelled by user"],
   );
 });
 
-test("rejects invalid session relationships without partial records", async (t) => {
+void test("rejects invalid session relationships without partial records", async (t) => {
   const dataDir = await mkdtemp(
     path.join(os.tmpdir(), "llm-garage-session-relations-"),
   );
@@ -240,7 +238,7 @@ test("rejects invalid session relationships without partial records", async (t) 
   );
 });
 
-test("persists worker failures and their terminal events", async (t) => {
+void test("persists worker failures and their terminal events", async (t) => {
   const dataDir = await mkdtemp(
     path.join(os.tmpdir(), "llm-garage-session-failure-"),
   );
@@ -275,8 +273,9 @@ test("persists worker failures and their terminal events", async (t) => {
   await waitForStatus(store, session.id, "failed");
   const [turn] = await store.listTurns(session.id);
   assert.equal(turn?.status, "failed");
+  assert.ok(turn);
   assert.deepEqual(
-    (await store.listRunEvents(turn!.id)).map(({ kind, sequence }) => ({
+    (await store.listRunEvents(turn.id)).map(({ kind, sequence }) => ({
       kind,
       sequence,
     })),
