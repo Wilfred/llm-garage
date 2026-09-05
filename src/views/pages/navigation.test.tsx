@@ -26,6 +26,13 @@ void test("keeps the primary navigation focused", async () => {
   assert.equal(html.match(/href="\/sessions\/new"/g)?.length, 1);
 });
 
+void test("loads page styles from the shared stylesheet", () => {
+  const html = renderPage(<DashboardPage repos={[]} sessions={[]} />);
+
+  assert.match(html, /<link rel="stylesheet" href="\/styles\.css"\/>/);
+  assert.doesNotMatch(html, /<style>/);
+});
+
 void test("renders the repository listing without branch or delete controls", async () => {
   const store = new MemoryDataStore();
   const [repos, sessions] = await Promise.all([
