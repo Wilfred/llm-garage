@@ -18,14 +18,18 @@
   "author": "Wilfred Hughes",
   "license": "MIT",
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "preact": "^10.29.8",
     "preact-render-to-string": "^6.7.0",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^1.1.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.0",
     "eslint": "^10.6.0",
@@ -33,5 +37,9 @@
     "tsx": "^4.23.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.62.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true,
+    "esbuild@0.28.1": true
   }
 }

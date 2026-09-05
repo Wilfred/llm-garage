@@ -1,13 +1,19 @@
-import express from "express";
 import { config } from "../config";
-import { healthRouter } from "./routes/health";
-import { pagesRouter } from "./routes/pages";
+import { createAppDataSource } from "../db/data-source";
+import { createApp } from "./app";
 
-const app = express();
+const dataSource = createAppDataSource(config.DATA_DIR);
 
-app.use(pagesRouter);
-app.use(healthRouter);
+async function main(): Promise<void> {
+  await dataSource.initialize();
+  const app = createApp(dataSource);
 
-app.listen(config.PORT, config.HOST, () => {
-  console.log(`llm-garage listening on http://${config.HOST}:${config.PORT}`);
+  app.listen(config.PORT, config.HOST, () => {
+    console.log(`llm-garage listening on http://${config.HOST}:${config.PORT}`);
+  });
+}
+
+void main().catch((error: unknown) => {
+  console.error("Failed to start llm-garage", error);
+  process.exitCode = 1;
 });

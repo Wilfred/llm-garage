@@ -338,16 +338,6 @@ Each milestone lists **Build** and **Definition of done** (verification). Do not
 milestone N+1 until N's definition of done has been demonstrated. Commit + push at each
 boundary, then remove the completed milestone from this document.
 
-### M2 — TypeORM + SQLite wired
-
-**Build:** `src/db/data-source.ts` (better-sqlite3, WAL, `synchronize: true`, db file at
-`${DATA_DIR}/app.db`), `Setting` entity, healthz extended to `{ok:true, db:true}` via a
-trivial query, bootstrap initializes the DataSource before listening. Docker: declare
-the data dir as a volume and document `-v llm-garage-data:/app/data`.
-
-**Definition of done:** healthz reports `db:true`; `data/app.db` created on first run;
-restart keeps data; build + start (non-dev) also works.
-
 ### M3 — Clickable UI prototype (dummy backend)
 
 **Purpose:** let Wilfred play with the whole intended UX — navigation, forms, the
@@ -372,8 +362,9 @@ real backend later drops in underneath the same views without rewriting them.
   server run; state resets on restart (documented, expected). "Running" a session is
   faked: on submit it appends a few scripted log lines over ~2s and flips to
   `awaiting_feedback` — enough to feel the loop without SSE/Docker/agents.
-- **No Docker, no TypeORM writes, no GitHub, no real agent.** The M2 `Setting`/DB remains
-  wired only for `/healthz`; all prototype data lives in the store.
+- **No Docker, no TypeORM writes, no GitHub, no real agent.** The database-backed
+  `Setting` entity remains wired only for `/healthz`; all prototype data lives in the
+  store.
 - **Keep the seam honest:** views import only `DataStore`. Later milestones implement
   `DataStore` over TypeORM + real orchestration and delete the in-memory impl — the
   fixtures are throwaway, the interface and views are not.

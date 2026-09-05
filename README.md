@@ -33,6 +33,9 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 - `npm test` — unit tests, including default HTML-escaping coverage
 - `npm run format` — prettier
 
+Application data is stored in `DATA_DIR/app.db` (`data/app.db` by default). The
+SQLite database uses WAL mode and is created automatically on first startup.
+
 ## Docker
 
 ```sh
@@ -40,7 +43,7 @@ docker build -t llm-garage .
 docker run --rm -p 3000:3000 -v llm-garage-data:/app/data llm-garage
 ```
 
-From M5 onward the container also needs the Docker socket to spawn sandbox
+From M6 onward the container also needs the Docker socket to spawn sandbox
 containers: `-v /var/run/docker.sock:/var/run/docker.sock`.
 
 ## Influences & similar projects
