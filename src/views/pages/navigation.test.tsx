@@ -132,9 +132,10 @@ test("new-session form has no prompt-library controls", async () => {
   assert.doesNotMatch(html, /Codex/);
   assert.match(html, />Model</);
   assert.match(html, /Run through OpenRouter/);
-  assert.match(html, /value="openai\/gpt-5\.2"/);
-  assert.match(html, /value="anthropic\/claude-sonnet-4\.5"/);
-  assert.match(html, /value="google\/gemini-3\.1-pro-preview"/);
+  assert.match(html, /value="openai\/gpt-5\.6-sol"/);
+  assert.match(html, /value="anthropic\/claude-opus-5"/);
+  assert.match(html, /value="moonshotai\/kimi-k3"/);
+  assert.match(html, /value="z-ai\/glm-5\.2"/);
 });
 
 test("identifies each session's model and OpenRouter gateway", async () => {
@@ -143,8 +144,9 @@ test("identifies each session's model and OpenRouter gateway", async () => {
   const sessions = await store.listSessions();
   const html = renderPage(<SessionsPage repos={repos} sessions={sessions} />);
 
-  assert.match(html, /GPT-5\.2 via OpenRouter/);
-  assert.match(html, /Claude Sonnet 4\.5 via OpenRouter/);
-  assert.match(html, /Gemini 3\.1 Pro Preview via OpenRouter/);
+  assert.match(html, /GPT-5\.6 Sol via OpenRouter/);
+  assert.match(html, /Claude Opus 5 via OpenRouter/);
+  assert.match(html, /Kimi K3 via OpenRouter/);
+  assert.match(html, /GLM 5\.2 via OpenRouter/);
   assert.doesNotMatch(html, /codex runner/i);
 });

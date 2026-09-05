@@ -1,18 +1,23 @@
 export const modelCatalog = [
   {
-    id: "openai/gpt-5.2",
-    name: "GPT-5.2",
+    id: "openai/gpt-5.6-sol",
+    name: "GPT-5.6 Sol",
     provider: "OpenAI",
   },
   {
-    id: "anthropic/claude-sonnet-4.5",
-    name: "Claude Sonnet 4.5",
+    id: "anthropic/claude-opus-5",
+    name: "Claude Opus 5",
     provider: "Anthropic",
   },
   {
-    id: "google/gemini-3.1-pro-preview",
-    name: "Gemini 3.1 Pro Preview",
-    provider: "Google",
+    id: "moonshotai/kimi-k3",
+    name: "Kimi K3",
+    provider: "MoonshotAI",
+  },
+  {
+    id: "z-ai/glm-5.2",
+    name: "GLM 5.2",
+    provider: "Z.ai",
   },
 ] as const;
 
