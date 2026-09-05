@@ -322,7 +322,11 @@ export class DatabaseDataStore implements DataStore {
 
       await writes;
       if (controller.signal.aborted) return;
-      if (workerError) throw workerError;
+      if (workerError) {
+        throw workerError instanceof Error
+          ? workerError
+          : new Error("Worker failed", { cause: workerError });
+      }
       await this.finishWorker(sessionId, turnId);
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -503,7 +507,7 @@ function toSession(entity: SessionEntity): Session {
   }
   return {
     id: entity.id,
-    parentId: entity.parentId ?? undefined,
+    ...(entity.parentId === null ? {} : { parentId: entity.parentId }),
     rootId: entity.rootId,
     repoId: entity.repoId,
     title: entity.title,
@@ -512,7 +516,7 @@ function toSession(entity: SessionEntity): Session {
     taskPrompt: entity.taskPrompt,
     createPr: entity.createPr,
     autoMerge: entity.autoMerge,
-    prUrl: entity.prUrl ?? undefined,
+    ...(entity.prUrl === null ? {} : { prUrl: entity.prUrl }),
     createdAt: entity.createdAt,
     updatedAt: entity.updatedAt,
   };
@@ -526,7 +530,7 @@ function toTurn(entity: TurnEntity): Turn {
     prompt: entity.prompt,
     status: entity.status,
     createdAt: entity.createdAt,
-    finishedAt: entity.finishedAt ?? undefined,
+    ...(entity.finishedAt === null ? {} : { finishedAt: entity.finishedAt }),
   };
 }
 
