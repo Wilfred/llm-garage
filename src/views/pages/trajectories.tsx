@@ -1,6 +1,6 @@
 import type { Repo, RunEvent, Trajectory, Turn } from "../../store/types";
-import { getModel, modelCatalog } from "../../models";
-import { formatDate, TrajectoryCards, StatusBadge } from "../components";
+import { modelCatalog } from "../../models";
+import { TrajectoryCards, StatusBadge } from "../components";
 import { Layout } from "../layout";
 
 export function NewTrajectoryPage({
@@ -66,15 +66,12 @@ export type TurnTranscript = { turn: Turn; events: RunEvent[] };
 
 export function TrajectoryDetailPage({
   trajectory,
-  repo,
   transcript,
 }: {
   trajectory: Trajectory;
-  repo?: Repo;
   transcript: TurnTranscript[];
 }) {
-  const model = getModel(trajectory.modelId);
-  const canFeedback =
+  const canContinue =
     trajectory.status !== "running" &&
     trajectory.status !== "queued" &&
     trajectory.status !== "archived";
@@ -91,14 +88,8 @@ export function TrajectoryDetailPage({
         <span>/</span>
         <strong>{trajectory.title}</strong>
       </div>
-      <div class="page-header">
-        <div>
-          <StatusBadge status={trajectory.status} />
-          <p>
-            {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"} ·{" "}
-            {model.name} via OpenRouter · {formatDate(trajectory.createdAt)}
-          </p>
-        </div>
+      <div class="detail-toolbar">
+        <StatusBadge status={trajectory.status} />
         <div class="actions">
           {canCancel && (
             <form
@@ -106,7 +97,7 @@ export function TrajectoryDetailPage({
               action={`/trajectories/${trajectory.id}/cancel`}
             >
               <button class="button button-danger" type="submit">
-                Cancel run
+                Cancel
               </button>
             </form>
           )}
@@ -124,18 +115,8 @@ export function TrajectoryDetailPage({
       </div>
       <div class={trajectory.prUrl ? "split" : undefined}>
         <section class="transcript">
-          <div class="section-heading">
-            <h2>Transcript</h2>
-            <span class="count">Dummy worker events appear as it runs</span>
-          </div>
-          {transcript.map(({ turn, events }, index) => (
+          {transcript.map(({ turn, events }) => (
             <article class="card">
-              <div class="turn-header">
-                <div>
-                  <strong>Turn {index + 1}</strong>{" "}
-                  <span class="muted small">· {turn.kind}</span>
-                </div>
-              </div>
               <p class="turn-prompt">{turn.prompt}</p>
               <pre class="log">
                 {events
@@ -147,27 +128,22 @@ export function TrajectoryDetailPage({
               </pre>
             </article>
           ))}
-          {canFeedback && (
-            <section class="card">
-              <h2>Send feedback</h2>
-              <form
-                class="stack"
-                method="post"
-                action={`/trajectories/${trajectory.id}/feedback`}
-              >
-                <label>
-                  Continue this trajectory
-                  <textarea
-                    name="feedback"
-                    required
-                    placeholder="Ask for a revision or the next step…"
-                  />
-                </label>
-                <button class="button button-primary" type="submit">
-                  Start feedback turn
-                </button>
-              </form>
-            </section>
+          {canContinue && (
+            <form
+              class="continue-form"
+              method="post"
+              action={`/trajectories/${trajectory.id}/prompts`}
+            >
+              <textarea
+                name="prompt"
+                required
+                aria-label="Additional prompt"
+                placeholder="Add another prompt…"
+              />
+              <button class="button button-primary" type="submit">
+                Send
+              </button>
+            </form>
           )}
         </section>
         {trajectory.prUrl && (
@@ -175,9 +151,6 @@ export function TrajectoryDetailPage({
             <section class="card">
               <h2>Pull request</h2>
               <a href={trajectory.prUrl}>Open pull request</a>
-              {repo?.autoMerge && (
-                <p class="muted small">Auto-merge is enabled.</p>
-              )}
             </section>
           </aside>
         )}

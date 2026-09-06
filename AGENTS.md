@@ -8,6 +8,10 @@ checkout.
 Keep the interface minimal and information dense. Choose designs that
 work on both desktop and mobile screens.
 
+Make form fields self-explanatory through their content, placeholder,
+and accessible name. Do not add visible labels that merely repeat an
+obvious field meaning.
+
 ## Pull Requests
 
 For implementation work, take ownership of delivery: commit the changes,
