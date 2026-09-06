@@ -39,10 +39,7 @@ export function createSessionsRouter(store: DataStore): Router {
   });
 
   router.get("/sessions/new", async (req, res) => {
-    const [repos, sessions] = await Promise.all([
-      store.listRepos(),
-      store.listSessions(),
-    ]);
+    const repos = await store.listRepos();
     const selectedRepoId = queryString(req.query["repoId"]);
     res
       .type("html")
@@ -50,7 +47,6 @@ export function createSessionsRouter(store: DataStore): Router {
         renderPage(
           <NewSessionPage
             repos={repos}
-            sessions={sessions}
             {...(selectedRepoId === undefined ? {} : { selectedRepoId })}
           />,
         ),
@@ -59,14 +55,10 @@ export function createSessionsRouter(store: DataStore): Router {
 
   router.post("/sessions", async (req, res) => {
     const repoId = formField(req.body, "repoId");
-    const title = formField(req.body, "title");
     const taskPrompt = formField(req.body, "taskPrompt");
     const modelId = formField(req.body, "modelId");
-    if (!repoId || !title || !taskPrompt || !isModelId(modelId)) {
-      const [repos, sessions] = await Promise.all([
-        store.listRepos(),
-        store.listSessions(),
-      ]);
+    if (!repoId || !taskPrompt || !isModelId(modelId)) {
+      const repos = await store.listRepos();
       res
         .status(400)
         .type("html")
@@ -74,25 +66,20 @@ export function createSessionsRouter(store: DataStore): Router {
           renderPage(
             <NewSessionPage
               repos={repos}
-              sessions={sessions}
               selectedRepoId={repoId}
-              error="Repository, model, title, and task are required."
+              error="Repository, model, and task are required."
             />,
           ),
         );
       return;
     }
-    const parentId = formField(req.body, "parentId");
     const session = await store.createSession({
       repoId,
-      ...(parentId ? { parentId } : {}),
-      title,
+      title: titleFromTask(taskPrompt),
       taskPrompt,
       modelId,
-      createPr:
-        formField(req.body, "createPr") === "yes" ||
-        formField(req.body, "autoMerge") === "yes",
-      autoMerge: formField(req.body, "autoMerge") === "yes",
+      createPr: true,
+      autoMerge: false,
     });
     res.redirect(303, `/sessions/${session.id}`);
   });
@@ -153,6 +140,11 @@ export function createSessionsRouter(store: DataStore): Router {
   });
 
   return router;
+}
+
+export function titleFromTask(taskPrompt: string): string {
+  const firstLine = taskPrompt.split(/\r?\n/, 1)[0] ?? taskPrompt;
+  return firstLine.length > 80 ? `${firstLine.slice(0, 79)}…` : firstLine;
 }
 
 export function filterSessionsByRepo(

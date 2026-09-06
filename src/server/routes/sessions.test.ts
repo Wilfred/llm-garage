@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryDataStore } from "../../store/memory";
-import { filterSessionsByRepo } from "./sessions";
+import { filterSessionsByRepo, titleFromTask } from "./sessions";
 
 void test("filters sessions by a known repository", async () => {
   const store = new MemoryDataStore();
@@ -30,4 +30,9 @@ void test("ignores an unknown repository filter", async () => {
 
   assert.equal(filtered.selectedRepo, undefined);
   assert.deepEqual(filtered.visibleSessions, sessions);
+});
+
+void test("derives a concise session title from the task", () => {
+  assert.equal(titleFromTask("Fix the form\nKeep it simple"), "Fix the form");
+  assert.equal(titleFromTask("a".repeat(81)), `${"a".repeat(79)}…`);
 });

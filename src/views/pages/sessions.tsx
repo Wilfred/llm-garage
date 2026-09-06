@@ -5,12 +5,10 @@ import { Layout } from "../layout";
 
 export function NewSessionPage({
   repos,
-  sessions,
   selectedRepoId,
   error,
 }: {
   repos: Repo[];
-  sessions: Session[];
   selectedRepoId?: string;
   error?: string;
 }) {
@@ -34,82 +32,27 @@ export function NewSessionPage({
       ) : (
         <form class="card stack form-card" method="post" action="/sessions">
           <div class="field-row">
-            <label>
-              Repository
-              <select name="repoId" required>
-                {repos.map((repo) => (
-                  <option value={repo.id} selected={repo.id === selectedRepoId}>
-                    {repo.owner}/{repo.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Model
-              <span class="help">Run through OpenRouter</span>
-              <select name="modelId" required>
-                {modelCatalog.map((model) => (
-                  <option value={model.id}>
-                    {model.name} · {model.provider}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <label>
-            Session title
-            <input
-              name="title"
-              required
-              placeholder="Improve the settings workflow"
-            />
-          </label>
-          <label>
-            Task for the agent
-            <textarea
-              name="taskPrompt"
-              required
-              placeholder="Describe the outcome you want…"
-            />
-          </label>
-          <label>
-            Parent session{" "}
-            <span class="help">
-              Optional: make this session part of an existing work tree.
-            </span>
-            <select name="parentId">
-              <option value="">No parent</option>
-              {sessions
-                .filter(({ status }) => status !== "archived")
-                .map((session) => (
-                  <option value={session.id}>{session.title}</option>
-                ))}
+            <select name="repoId" required aria-label="Repository">
+              {repos.map((repo) => (
+                <option value={repo.id} selected={repo.id === selectedRepoId}>
+                  {repo.owner}/{repo.name}
+                </option>
+              ))}
             </select>
-          </label>
-          <fieldset>
-            <legend>After the run</legend>
-            <div class="check-row">
-              <label class="check">
-                <input
-                  id="create-pr"
-                  type="checkbox"
-                  name="createPr"
-                  value="yes"
-                  checked
-                />{" "}
-                Create a pull request
-              </label>
-              <label class="check">
-                <input
-                  id="auto-merge"
-                  type="checkbox"
-                  name="autoMerge"
-                  value="yes"
-                />{" "}
-                Auto-merge when CI passes
-              </label>
-            </div>
-          </fieldset>
+            <select name="modelId" required aria-label="Model">
+              {modelCatalog.map((model) => (
+                <option value={model.id}>
+                  {model.name} · {model.provider}
+                </option>
+              ))}
+            </select>
+          </div>
+          <textarea
+            name="taskPrompt"
+            required
+            aria-label="Task for the agent"
+            placeholder="Describe the outcome you want…"
+          />
           <button class="button button-primary" type="submit">
             Start dummy session
           </button>
