@@ -49,18 +49,105 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
   assert.equal(headers.get("X-OpenRouter-Title"), "LLM Garage");
   assert.equal(typeof init.body, "string");
   const body: unknown = JSON.parse(init.body as string);
-  assert.deepEqual(body, {
-    model: "anthropic/claude-opus-5",
-    messages: [
-      { role: "user", content: "First question" },
-      { role: "assistant", content: "First answer" },
-      { role: "user", content: "Follow-up question" },
-    ],
-  });
+  assert.deepEqual(
+    (body as { model: string; messages: unknown[] }).model,
+    "anthropic/claude-opus-5",
+  );
+  assert.deepEqual((body as { messages: unknown[] }).messages, [
+    { role: "user", content: "First question" },
+    { role: "assistant", content: "First answer" },
+    { role: "user", content: "Follow-up question" },
+  ]);
+  assert.equal(
+    (body as { tools: Array<{ function: { name: string } }> }).tools[0]
+      ?.function.name,
+    "run_command",
+  );
   assert.deepEqual(events, [
     { kind: "model_output", data: "A useful answer" },
     { kind: "usage", data: "1,250 input tokens · 42 output tokens" },
   ]);
+});
+
+void test("runs model-requested shell commands and returns their output", async () => {
+  const requests: unknown[] = [];
+  const responses = [
+    {
+      choices: [
+        {
+          message: {
+            content: "I'll inspect the container.",
+            tool_calls: [
+              {
+                id: "call-1",
+                type: "function",
+                function: {
+                  name: "run_command",
+                  arguments: JSON.stringify({ command: "ls /" }),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    {
+      choices: [
+        {
+          message: {
+            content: "The root contains bin and workspace.",
+          },
+        },
+      ],
+    },
+  ];
+  const worker = new OpenRouterWorker({
+    apiKey: "test-key",
+    fetch: async (_input, init) => {
+      requests.push(JSON.parse(init?.body as string));
+      return Response.json(responses.shift());
+    },
+  });
+  const commands: string[] = [];
+  const events: WorkerEvent[] = [];
+
+  await worker.run({
+    modelId: "openai/gpt-5.6-sol",
+    modelName: "GPT-5.6 Sol",
+    messages: [{ role: "user", content: "List the container root" }],
+    signal: new AbortController().signal,
+    runCommand: async (command) => {
+      commands.push(command);
+      return {
+        exitCode: 0,
+        stdout: "bin\nworkspace\n",
+        stderr: "",
+        truncated: false,
+      };
+    },
+    emit: (event) => events.push(event),
+  });
+
+  assert.deepEqual(commands, ["ls /"]);
+  assert.equal(requests.length, 2);
+  const secondRequest = requests[1] as {
+    messages: Array<Record<string, unknown>>;
+  };
+  assert.deepEqual(secondRequest.messages.at(-1), {
+    role: "tool",
+    tool_call_id: "call-1",
+    content: JSON.stringify({
+      exitCode: 0,
+      stdout: "bin\nworkspace\n",
+      stderr: "",
+      truncated: false,
+    }),
+  });
+  assert.deepEqual(
+    events.map(({ kind }) => kind),
+    ["model_output", "tool", "tool", "model_output"],
+  );
+  assert.match(events[2]?.data ?? "", /bin\\nworkspace/);
 });
 
 void test("reports OpenRouter API errors", async () => {

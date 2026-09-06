@@ -2,6 +2,8 @@ import { config } from "../config";
 import { createAppDataSource } from "../db/data-source";
 import { DatabaseDataStore } from "../store/db";
 import { OpenRouterWorker } from "../worker/openrouter";
+import { DockerSandbox } from "../sandbox/docker";
+import Docker from "dockerode";
 import { createApp } from "./app";
 import type { Express } from "express";
 import type { Server } from "node:http";
@@ -12,6 +14,10 @@ async function main(): Promise<void> {
   await dataSource.initialize();
   const store = new DatabaseDataStore(dataSource, {
     worker: new OpenRouterWorker({ apiKey: config.OPENROUTER_API_KEY }),
+    sandbox: new DockerSandbox({
+      docker: new Docker({ socketPath: config.DOCKER_SOCKET }),
+      image: config.WORKER_IMAGE,
+    }),
   });
   await store.initialize();
   const app = createApp(dataSource, store);

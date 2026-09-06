@@ -20,6 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^12.11.1",
+    "dockerode": "^5.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "markdown-it": "^15.0.1",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^9.6.0",
+    "@types/dockerode": "^4.0.1",
     "@types/express": "^5.0.6",
     "@types/markdown-it": "^14.2.0",
     "@types/node": "^26.4.1",
