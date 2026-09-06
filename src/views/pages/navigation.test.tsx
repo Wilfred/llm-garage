@@ -231,3 +231,83 @@ void test("identifies each trajectory's model and OpenRouter gateway", async () 
   assert.match(html, /GLM 5\.2 via OpenRouter/);
   assert.doesNotMatch(html, /codex runner/i);
 });
+
+void test("shows model output outside the collapsed turn details", async () => {
+  const store = new MemoryDataStore();
+  const trajectory = await store.getTrajectory("trajectory-navigation");
+  assert.ok(trajectory);
+  const [turn] = await store.listTurns(trajectory.id);
+  assert.ok(turn);
+  const ts = new Date("2026-01-01T09:30:00Z");
+  const html = renderPage(
+    <TrajectoryDetailPage
+      trajectory={trajectory}
+      transcript={[
+        {
+          turn,
+          events: [
+            {
+              id: "event-status",
+              trajectoryId: trajectory.id,
+              turnId: turn.id,
+              sequence: 1,
+              kind: "status",
+              data: "Trajectory finished",
+              ts,
+            },
+            {
+              id: "event-output",
+              trajectoryId: trajectory.id,
+              turnId: turn.id,
+              sequence: 2,
+              kind: "model_output",
+              data: "The capital of France is Paris.",
+              ts,
+            },
+          ],
+        },
+      ]}
+    />,
+  );
+
+  const [beforeDetails] = html.split("<details");
+  assert.ok(beforeDetails);
+  assert.match(beforeDetails, /The capital of France is Paris\./);
+  assert.doesNotMatch(beforeDetails, /Trajectory finished/);
+  assert.match(html, /<summary>1 event<\/summary>/);
+  assert.doesNotMatch(html, /<details[^>]*open/);
+});
+
+void test("renders model output as markdown without raw HTML", async () => {
+  const store = new MemoryDataStore();
+  const trajectory = await store.getTrajectory("trajectory-navigation");
+  assert.ok(trajectory);
+  const [turn] = await store.listTurns(trajectory.id);
+  assert.ok(turn);
+  const html = renderPage(
+    <TrajectoryDetailPage
+      trajectory={trajectory}
+      transcript={[
+        {
+          turn,
+          events: [
+            {
+              id: "event-output",
+              trajectoryId: trajectory.id,
+              turnId: turn.id,
+              sequence: 1,
+              kind: "model_output",
+              data: "Landmarks:\n\n- **Eiffel Tower**\n- `Louvre`\n\n<script>alert(1)</script>",
+              ts: new Date("2026-01-01T09:30:00Z"),
+            },
+          ],
+        },
+      ]}
+    />,
+  );
+
+  assert.match(html, /<li><strong>Eiffel Tower<\/strong><\/li>/);
+  assert.match(html, /<code>Louvre<\/code>/);
+  assert.doesNotMatch(html, /<script>alert/);
+  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+});

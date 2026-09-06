@@ -1,3 +1,4 @@
+import MarkdownIt from "markdown-it";
 import type { Repo, RunEvent, Trajectory, Turn } from "../../store/types";
 import { modelCatalog } from "../../models";
 import { TrajectoryCards, StatusBadge } from "../components";
@@ -61,6 +62,10 @@ export function NewTrajectoryPage({
 
 export type TurnTranscript = { turn: Turn; events: RunEvent[] };
 
+// html: false escapes any raw HTML in model output, so the rendered
+// markdown needs no separate sanitiser.
+const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
+
 export function TrajectoryDetailPage({
   trajectory,
   transcript,
@@ -113,17 +118,7 @@ export function TrajectoryDetailPage({
       <div class={trajectory.prUrl ? "split" : undefined}>
         <section class="transcript">
           {transcript.map(({ turn, events }) => (
-            <article class="card">
-              <p class="turn-prompt">{turn.prompt}</p>
-              <pre class="log">
-                {events
-                  .map(
-                    (event) =>
-                      `${event.ts.toLocaleTimeString("en-GB")}  [${event.kind}] ${event.data}`,
-                  )
-                  .join("\n") || "No output yet."}
-              </pre>
-            </article>
+            <TurnCard turn={turn} events={events} />
           ))}
           {canContinue && (
             <form
@@ -153,6 +148,42 @@ export function TrajectoryDetailPage({
         )}
       </div>
     </Layout>
+  );
+}
+
+function TurnCard({ turn, events }: TurnTranscript) {
+  const output = events
+    .filter((event) => event.kind === "model_output")
+    .map((event) => event.data)
+    .join("\n\n");
+  const details = events.filter((event) => event.kind !== "model_output");
+  return (
+    <article class="card">
+      <p class="turn-prompt">{turn.prompt}</p>
+      {output ? (
+        <div
+          class="model-output"
+          dangerouslySetInnerHTML={{ __html: markdown.render(output) }}
+        />
+      ) : (
+        <p class="model-output empty-output">No output yet.</p>
+      )}
+      {details.length > 0 && (
+        <details class="turn-details">
+          <summary>
+            {details.length} {details.length === 1 ? "event" : "events"}
+          </summary>
+          <pre class="log">
+            {details
+              .map(
+                (event) =>
+                  `${event.ts.toLocaleTimeString("en-GB")}  [${event.kind}] ${event.data}`,
+              )
+              .join("\n")}
+          </pre>
+        </details>
+      )}
+    </article>
   );
 }
 
