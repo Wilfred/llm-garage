@@ -27,8 +27,8 @@ The target feature set is:
    A/B testing.
 5. Optionally auto-merge a session's pull request when its required CI checks
    pass.
-6. Fork a session into child sessions so people and agents can split out related
-   work without relying on short-lived subagents.
+6. Let an agent spawn a durable child session for related work without relying
+   on short-lived subagents.
 
 ## Scope and principles
 
@@ -38,8 +38,10 @@ The target feature set is:
   or splitting work creates another linked session and preserves the original.
 - Model identity and runner implementation are separate. A model is what the
   user selects and evaluates; a runner is the adapter that invokes an agent.
-- A/B comparison membership and parent/child lineage are separate relationships.
-  Comparing peers does not make one the parent of another.
+- A/B comparison membership and spawned-session provenance are separate
+  relationships. A parent link records where a child came from; it is not a
+  user-curated hierarchy, and the product does not need a general session-tree
+  UI. Direct parent or child links can be added later if they prove useful.
 - Execution state and pull-request delivery state are separate state machines.
   A coding session can succeed even if pushing a branch or merging a PR fails.
 - Every session is reproducible from its stored repository, exact base commit,
@@ -199,10 +201,10 @@ events rather than reusing an unrestricted private-session response. Private
 session IDs return not found on the public route. Secrets and environment values
 are redacted before persistence, not merely hidden at render time.
 
-### Forked session
+### Spawned child session
 
-A human or an authorized running agent can create a child session for related
-work. The child records its parent and root session, uses a fresh independent
+An authorized running agent can create a child session for related work. The
+child records its source session for provenance, uses a fresh independent
 workspace, and starts from the parent's recorded base SHA by default. It does not
 implicitly inherit uncommitted filesystem state. A later version may explicitly
 accept a pushed commit as its base, but that must be visible in the child record.
@@ -440,28 +442,27 @@ Definition of done:
   policy, timeout, and restart are covered without accidental merges.
 - Manual and automatic delivery share the same audited state transitions.
 
-### M12 — Forked sessions and agent control API
+### M12 — Spawned sessions and agent control API
 
 Build:
 
-- Expose parent/root lineage in session detail and a browsable session tree.
-- Add a human `Fork session` action that pre-fills repository, base SHA, task
-  context, and model while allowing deliberate edits.
 - Add a narrow HTTP API and `garage-ctl` command that let an active sandbox create
-  and inspect descendants within its own session tree.
-- Issue short-lived, tree-scoped bearer credentials to the runner and enforce
-  depth, child-count, concurrency, and total-budget limits.
+  a child session and inspect the sessions it spawned.
+- Issue short-lived, session-scoped bearer credentials to the runner and enforce
+  child-count, concurrency, and total-budget limits.
 - Give every child an independent durable record, queue slot, workspace, event
   ledger, metrics, and delivery state.
+- Keep parent links as provenance. Do not add a general hierarchy browser;
+  direct links between a parent and its spawned children are optional.
 
 Definition of done:
 
-- A user and an authorized agent can each create a child session, and the lineage
-  is correct after restart.
+- An authorized agent can create a child session, and its source-session link is
+  correct after restart.
 - The child starts from the recorded base SHA in a fresh workspace and does not
   silently inherit parent filesystem changes.
-- Cross-tree access, expired credentials, cyclic lineage, and configured limits
-  are rejected and tested.
+- Cross-session access, expired credentials, and configured limits are rejected
+  and tested.
 - Parent cancellation does not corrupt completed children; active-child behavior
   follows an explicit, tested policy.
 
@@ -474,7 +475,7 @@ Definition of done:
 | Record preferred results and summarize model performance  | M10                 |
 | Run linked sessions side by side                          | M10                 |
 | Auto-merge when CI is green                               | M11                 |
-| Fork sessions into durable child work                     | M12                 |
+| Spawn durable child sessions from an active agent         | M12                 |
 
 ## Cross-cutting quality gates
 

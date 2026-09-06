@@ -4,7 +4,7 @@ import { MemoryDataStore } from "../../store/memory";
 import { renderPage } from "../render";
 import { DashboardPage } from "./dashboard";
 import { NewRepoPage, RepoDetailPage, ReposPage } from "./repos";
-import { NewSessionPage, SessionsPage } from "./sessions";
+import { NewSessionPage, SessionDetailPage, SessionsPage } from "./sessions";
 
 void test("keeps the primary navigation focused", async () => {
   const store = new MemoryDataStore();
@@ -144,6 +144,54 @@ void test("new-session form has no prompt-library controls", async () => {
   assert.match(html, /value="anthropic\/claude-opus-5"/);
   assert.match(html, /value="moonshotai\/kimi-k3"/);
   assert.match(html, /value="z-ai\/glm-5\.2"/);
+});
+
+void test("does not expose arbitrary session-tree controls", async () => {
+  const store = new MemoryDataStore();
+  const session = await store.getSession("session-navigation");
+  assert.ok(session);
+  const turns = await store.listTurns(session.id);
+  const transcript = await Promise.all(
+    turns.map(async (turn) => ({
+      turn,
+      events: await store.listRunEvents(turn.id),
+    })),
+  );
+  const repo = await store.getRepo(session.repoId);
+  const html = renderPage(
+    <SessionDetailPage
+      session={session}
+      {...(repo === undefined ? {} : { repo })}
+      transcript={transcript}
+    />,
+  );
+
+  assert.doesNotMatch(html, /Session tree/);
+  assert.doesNotMatch(html, /session-m3/);
+  assert.doesNotMatch(html, /<h1>Tighten dashboard navigation<\/h1>/);
+  assert.doesNotMatch(html, /started/);
+  assert.doesNotMatch(html, /Pull request/);
+  assert.doesNotMatch(html, />succeeded</);
+  assert.match(html, /status-idle">idle<\/span>/);
+});
+
+void test("uses only the four user-facing session states", async () => {
+  const store = new MemoryDataStore();
+  const html = renderPage(
+    <SessionsPage
+      repos={await store.listRepos()}
+      sessions={await store.listSessions()}
+    />,
+  );
+
+  assert.match(html, /status-active">active<\/span>/);
+  assert.match(html, /status-idle">idle<\/span>/);
+  assert.match(html, /status-archive">archive<\/span>/);
+  assert.match(html, /status-errored">errored<\/span>/);
+  assert.doesNotMatch(
+    html,
+    /status-(?:queued|running|awaiting_feedback|succeeded|failed|cancelled|archived)/,
+  );
 });
 
 void test("identifies each session's model and OpenRouter gateway", async () => {
