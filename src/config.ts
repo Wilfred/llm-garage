@@ -6,6 +6,7 @@ const envSchema = z.object({
   HOST: z.string().default("127.0.0.1"),
   DATA_DIR: z.string().min(1).default("data"),
   OPENROUTER_API_KEY: z.string().trim().min(1).optional(),
+  BRAVE_SEARCH_API_KEY: z.string().trim().min(1).optional(),
   DOCKER_SOCKET: z.string().min(1).default("/var/run/docker.sock"),
   WORKER_IMAGE: z.string().min(1).default("alpine:3.22.5"),
 });

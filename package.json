@@ -28,6 +28,7 @@
     "preact-render-to-string": "^6.7.0",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^1.1.1",
+    "undici": "^7.29.1",
     "zod": "^4.5.4"
   },
   "devDependencies": {
