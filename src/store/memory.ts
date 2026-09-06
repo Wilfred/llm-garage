@@ -9,6 +9,7 @@ import type {
   Turn,
 } from "./types";
 import { getModel } from "../models";
+import { DisabledSandbox, type Sandbox } from "../sandbox/types";
 import { DummyWorker } from "../worker/dummy";
 import type { ConversationMessage, TrajectoryWorker } from "../worker/types";
 import { RepoAlreadyExistsError } from "./errors";
@@ -17,6 +18,7 @@ export type MemoryStoreOptions = {
   seed?: boolean;
   simulationStepMs?: number;
   worker?: TrajectoryWorker;
+  sandbox?: Sandbox;
 };
 
 const minutesAgo = (minutes: number): Date =>
@@ -29,6 +31,7 @@ export class MemoryDataStore implements DataStore {
   private readonly events = new Map<string, RunEvent>();
   private readonly activeWorkers = new Map<string, AbortController>();
   private readonly worker: TrajectoryWorker;
+  private readonly sandbox: Sandbox;
   private sequence = 100;
   private lastTimestamp = 0;
 
@@ -36,8 +39,10 @@ export class MemoryDataStore implements DataStore {
     seed = true,
     simulationStepMs = 500,
     worker = new DummyWorker({ stepDelayMs: simulationStepMs }),
+    sandbox = new DisabledSandbox(),
   }: MemoryStoreOptions = {}) {
     this.worker = worker;
+    this.sandbox = sandbox;
     if (seed) this.seed();
   }
 
@@ -182,6 +187,7 @@ export class MemoryDataStore implements DataStore {
     const trajectory = this.trajectories.get(trajectoryId);
     if (!trajectory || trajectory.status === "archived") return false;
     this.stopWorker(trajectory.id);
+    await this.sandbox.archive(trajectory.id);
     const turn = this.activeTurn(trajectory.id);
     if (turn) {
       turn.status = "cancelled";
@@ -204,24 +210,29 @@ export class MemoryDataStore implements DataStore {
     const controller = new AbortController();
     this.activeWorkers.set(trajectoryId, controller);
     this.addEvent(turnId, "status", `${model.name} started`);
-    void this.worker
-      .run({
-        modelId: trajectory.modelId,
-        modelName: model.name,
-        messages: this.conversationMessages(trajectoryId),
-        signal: controller.signal,
-        emit: ({ kind, data }) => {
-          const currentTrajectory = this.trajectories.get(trajectoryId);
-          const turn = this.turns.get(turnId);
-          if (
-            currentTrajectory?.status === "running" &&
-            turn?.status === "running"
-          ) {
-            this.addEvent(turnId, kind, data);
-            currentTrajectory.updatedAt = this.now();
-          }
-        },
-      })
+    void this.sandbox
+      .create(trajectoryId)
+      .then(() =>
+        this.worker.run({
+          modelId: trajectory.modelId,
+          modelName: model.name,
+          messages: this.conversationMessages(trajectoryId),
+          signal: controller.signal,
+          runCommand: (command) =>
+            this.sandbox.runCommand(trajectoryId, command, controller.signal),
+          emit: ({ kind, data }) => {
+            const currentTrajectory = this.trajectories.get(trajectoryId);
+            const turn = this.turns.get(turnId);
+            if (
+              currentTrajectory?.status === "running" &&
+              turn?.status === "running"
+            ) {
+              this.addEvent(turnId, kind, data);
+              currentTrajectory.updatedAt = this.now();
+            }
+          },
+        }),
+      )
       .then(() => {
         const trajectory = this.trajectories.get(trajectoryId);
         const turn = this.turns.get(turnId);

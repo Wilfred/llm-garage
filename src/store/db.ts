@@ -5,6 +5,7 @@ import { RunEventEntity } from "../entities/run-event";
 import { TrajectoryEntity } from "../entities/trajectory";
 import { TurnEntity } from "../entities/turn";
 import { getModel, isModelId } from "../models";
+import { DisabledSandbox, type Sandbox } from "../sandbox/types";
 import { DummyWorker } from "../worker/dummy";
 import type {
   ConversationMessage,
@@ -31,6 +32,7 @@ export class DatabaseDataStore implements DataStore {
   private readonly eventRepository: Repository<RunEventEntity>;
   private readonly activeWorkers = new Map<string, AbortController>();
   private readonly worker: TrajectoryWorker;
+  private readonly sandbox: Sandbox;
   private readonly seed: boolean;
   private lastTimestamp = 0;
 
@@ -40,6 +42,7 @@ export class DatabaseDataStore implements DataStore {
       seed = true,
       simulationStepMs = 500,
       worker = new DummyWorker({ stepDelayMs: simulationStepMs }),
+      sandbox = new DisabledSandbox(),
     }: MemoryStoreOptions = {},
   ) {
     this.repoRepository = dataSource.getRepository(RepoEntity);
@@ -47,6 +50,7 @@ export class DatabaseDataStore implements DataStore {
     this.turnRepository = dataSource.getRepository(TurnEntity);
     this.eventRepository = dataSource.getRepository(RunEventEntity);
     this.worker = worker;
+    this.sandbox = sandbox;
     this.seed = seed;
   }
 
@@ -269,6 +273,9 @@ export class DatabaseDataStore implements DataStore {
 
   async archiveTrajectory(trajectoryId: string): Promise<boolean> {
     this.stopWorker(trajectoryId);
+    const existing = await this.getTrajectory(trajectoryId);
+    if (!existing || existing.status === "archived") return false;
+    await this.sandbox.archive(trajectoryId);
     return this.dataSource.transaction(async (manager) => {
       const trajectoryRepository = manager.getRepository(TrajectoryEntity);
       const trajectory = await trajectoryRepository.findOneBy({
@@ -320,6 +327,7 @@ export class DatabaseDataStore implements DataStore {
       const trajectory = await this.getTrajectory(trajectoryId);
       if (!trajectory) return;
       const messages = await this.conversationMessages(trajectoryId);
+      await this.sandbox.create(trajectoryId);
       let workerError: unknown;
       try {
         await this.worker.run({
@@ -327,6 +335,8 @@ export class DatabaseDataStore implements DataStore {
           modelName: getModel(trajectory.modelId).name,
           messages,
           signal: controller.signal,
+          runCommand: (command) =>
+            this.sandbox.runCommand(trajectoryId, command, controller.signal),
           emit: (event) => {
             writes = writes.then(() =>
               this.recordWorkerEvent(trajectoryId, turnId, event),

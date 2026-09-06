@@ -10,6 +10,7 @@ import { RepoAlreadyExistsError } from "./errors";
 import { DatabaseDataStore } from "./db";
 import type { DataStore, TrajectoryStatus } from "./types";
 import type { ConversationMessage } from "../worker/types";
+import type { Sandbox } from "../sandbox/types";
 
 void test("persists repository CRUD across data source restarts", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-repos-"));
@@ -345,6 +346,67 @@ void test("persists worker failures and their terminal events", async (t) => {
       { kind: "status", sequence: 3 },
     ],
   );
+});
+
+void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-sandbox-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const created: string[] = [];
+  const archived: string[] = [];
+  const commands: Array<{ trajectoryId: string; command: string }> = [];
+  const sandbox: Sandbox = {
+    create: async (trajectoryId) => {
+      created.push(trajectoryId);
+    },
+    runCommand: async (trajectoryId, command) => {
+      commands.push({ trajectoryId, command });
+      return {
+        exitCode: 0,
+        stdout: "bin\nworkspace\n",
+        stderr: "",
+        truncated: false,
+      };
+    },
+    archive: async (trajectoryId) => {
+      archived.push(trajectoryId);
+    },
+  };
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    sandbox,
+    worker: {
+      run: async (context) => {
+        assert.ok(context.runCommand);
+        const result = await context.runCommand("ls /");
+        context.emit({ kind: "tool", data: result.stdout });
+      },
+    },
+  });
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "sandbox-project",
+    defaultBranch: "main",
+    autoMerge: false,
+  });
+  const trajectory = await store.createTrajectory({
+    repoId: repo.id,
+    title: "Use a sandbox",
+    modelId: "openai/gpt-5.6-sol",
+    taskPrompt: "List the root directory",
+  });
+
+  await waitForStatus(store, trajectory.id, "succeeded");
+  assert.deepEqual(created, [trajectory.id]);
+  assert.deepEqual(commands, [
+    { trajectoryId: trajectory.id, command: "ls /" },
+  ]);
+  assert.equal(await store.archiveTrajectory(trajectory.id), true);
+  assert.deepEqual(archived, [trajectory.id]);
 });
 
 async function waitForStatus(

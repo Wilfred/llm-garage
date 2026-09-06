@@ -32,10 +32,10 @@ trajectory for related work that cannot be handled by a short-lived
 subagent. The parent link records provenance; this is not intended to
 be a general user-curated trajectory tree.
 
-**Status: clickable prototype.** The dashboard, repository workflow, and
-OpenRouter-backed multi-turn trajectory flow are available now. Docker agents and
-GitHub integration arrive in later milestones. See [PLAN.md](PLAN.md) for the full
-design and milestone roadmap.
+**Status: clickable prototype.** The dashboard, repository workflow,
+OpenRouter-backed multi-turn trajectory flow, and isolated Docker command execution
+are available now. Repository checkout and GitHub integration arrive in later
+milestones. See [PLAN.md](PLAN.md) for the full design and milestone roadmap.
 
 ## Development
 
@@ -53,6 +53,12 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 Repositories and trajectories are stored in SQLite at `DATA_DIR/app.db`
 (`data/app.db` by default) and survive restarts.
 
+The Docker daemon must be available to the development process. Each trajectory
+gets a container named `llm-garage-trajectory-<id>`, using `alpine:3.22.5` by
+default. Set `WORKER_IMAGE` to use another compatible image. Worker containers
+have no network access, run as an unprivileged user, and are removed when their
+trajectory is archived.
+
 ## Docker
 
 ```sh
@@ -62,6 +68,8 @@ docker run -d --name llm-garage --restart unless-stopped \
   -p 3000:3000 \
   --env-file .env \
   -e HOST=0.0.0.0 \
+  --group-add "$(stat -c '%g' /var/run/docker.sock)" \
+  --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
   --mount source=llm-garage-data,target=/app/data \
   llm-garage
 ```
@@ -70,5 +78,6 @@ The named volume is required: it stores the SQLite database outside the containe
 repository data survives container replacement. Reuse `llm-garage-data` when deploying
 a new image, and include that volume in host backups.
 
-From M6 onward the container also needs the Docker socket to spawn sandbox
-containers: `-v /var/run/docker.sock:/var/run/docker.sock`.
+Mounting the Docker socket gives LLM Garage control of the host Docker daemon.
+Only expose it to a trusted deployment. The first trajectory pulls the configured
+worker image if it is not already present.
