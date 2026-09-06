@@ -77,6 +77,11 @@ export class DatabaseDataStore implements DataStore {
     );
   }
 
+  async setRepoAutoMerge(id: string, autoMerge: boolean): Promise<boolean> {
+    const result = await this.repoRepository.update({ id }, { autoMerge });
+    return result.affected !== 0;
+  }
+
   async deleteRepo(id: string): Promise<DeleteRepoResult> {
     return this.dataSource.transaction(async (manager) => {
       const repoRepository = manager.getRepository(RepoEntity);
@@ -135,8 +140,6 @@ export class DatabaseDataStore implements DataStore {
         status: "running",
         modelId: input.modelId,
         taskPrompt: input.taskPrompt,
-        createPr: input.createPr,
-        autoMerge: input.autoMerge,
         prUrl: null,
         createdAt: now,
         updatedAt: now,
@@ -530,8 +533,6 @@ function toTrajectory(entity: TrajectoryEntity): Trajectory {
     status: entity.status,
     modelId: entity.modelId,
     taskPrompt: entity.taskPrompt,
-    createPr: entity.createPr,
-    autoMerge: entity.autoMerge,
     ...(entity.prUrl === null ? {} : { prUrl: entity.prUrl }),
     createdAt: entity.createdAt,
     updatedAt: entity.updatedAt,

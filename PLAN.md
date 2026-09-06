@@ -25,8 +25,8 @@ The target feature set is:
    performance over time.
 4. Run linked trajectories from the same prompt and source revision for side-by-side
    A/B testing.
-5. Optionally auto-merge a trajectory's pull request when its required CI checks
-   pass.
+5. Optionally auto-merge pull requests for a repository when their required CI
+   checks pass.
 6. Let an agent spawn a durable child trajectory for related work without relying
    on short-lived subagents.
 
@@ -172,14 +172,14 @@ environment-provided credentials remain outside ordinary product records.
 
 ### Single trajectory
 
-1. The user selects a repository, task, model, and delivery mode.
+1. The user selects a repository, task, and model.
 2. The app resolves and stores the repository's exact base commit and snapshots
    the model configuration.
 3. A transaction creates the queued trajectory and its first event.
 4. The scheduler assigns an isolated Docker workspace and invokes the runner.
 5. Runner output is normalized into events and summarized on the trajectory.
-6. On success, the user can inspect the diff and create a pull request, unless
-   pull-request or auto-merge delivery was selected at creation time.
+6. On success, the trajectory opens a pull request, and merges it when the
+   repository enables auto-merge.
 
 ### Side-by-side comparison
 
@@ -426,7 +426,7 @@ Definition of done:
 
 Build:
 
-- Implement the `auto_merge` delivery mode on top of the existing PR state
+- Implement the repository auto-merge setting on top of the existing PR state
   machine.
 - Observe required checks and combined commit status with bounded polling,
   jitter, retry/backoff, and a terminal timeout.

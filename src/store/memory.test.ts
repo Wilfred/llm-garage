@@ -41,7 +41,12 @@ void test("supports the prototype repository workflow", async () => {
     owner: "example",
     name: "scratch",
     defaultBranch: "trunk",
+    autoMerge: false,
   });
+  assert.equal(disposable.autoMerge, false);
+  assert.equal(await store.setRepoAutoMerge(disposable.id, true), true);
+  assert.equal((await store.getRepo(disposable.id))?.autoMerge, true);
+  assert.equal(await store.setRepoAutoMerge("missing", true), false);
   assert.equal(await store.deleteRepo(disposable.id), "deleted");
   assert.equal(await store.getRepo(disposable.id), undefined);
 });
@@ -52,14 +57,13 @@ void test("runs the dummy worker for initial and feedback turns", async () => {
     owner: "example",
     name: "project",
     defaultBranch: "main",
+    autoMerge: false,
   });
   const trajectory = await store.createTrajectory({
     repoId: repo.id,
     title: "Try the workflow",
     modelId: "z-ai/glm-5.2",
     taskPrompt: "Make a small change",
-    createPr: true,
-    autoMerge: false,
   });
 
   assert.equal(trajectory.status, "running");
@@ -108,6 +112,7 @@ void test("records a worker failure as a terminal trajectory", async () => {
     owner: "example",
     name: "project",
     defaultBranch: "main",
+    autoMerge: false,
   });
 
   const trajectory = await store.createTrajectory({
@@ -115,8 +120,6 @@ void test("records a worker failure as a terminal trajectory", async () => {
     title: "Fail predictably",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Exercise the failure path",
-    createPr: false,
-    autoMerge: false,
   });
   await delay(0);
 
@@ -136,14 +139,13 @@ void test("cancels a running prototype turn without later changing its state", a
     owner: "example",
     name: "project",
     defaultBranch: "main",
+    autoMerge: false,
   });
   const trajectory = await store.createTrajectory({
     repoId: repo.id,
     title: "Cancel me",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Wait",
-    createPr: false,
-    autoMerge: false,
   });
 
   assert.equal(await store.cancelTrajectory(trajectory.id), true);

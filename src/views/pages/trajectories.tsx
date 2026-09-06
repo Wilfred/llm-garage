@@ -175,7 +175,7 @@ export function TrajectoryDetailPage({
             <section class="card">
               <h2>Pull request</h2>
               <a href={trajectory.prUrl}>Open pull request</a>
-              {trajectory.autoMerge && (
+              {repo?.autoMerge && (
                 <p class="muted small">Auto-merge is enabled.</p>
               )}
             </section>
