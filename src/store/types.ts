@@ -9,14 +9,16 @@ export type Repo = {
   createdAt: Date;
 };
 
-export type TrajectoryStatus =
-  | "queued"
-  | "running"
-  | "awaiting_feedback"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "archived";
+export const trajectoryStatuses = [
+  "queued",
+  "running",
+  "awaiting_feedback",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "archived",
+] as const;
+export type TrajectoryStatus = (typeof trajectoryStatuses)[number];
 
 export type Trajectory = {
   id: string;
@@ -32,9 +34,16 @@ export type Trajectory = {
   updatedAt: Date;
 };
 
-export type TurnKind = "initial" | "feedback" | "spawn";
-export type TurnStatus =
-  "queued" | "running" | "succeeded" | "failed" | "cancelled";
+export const turnKinds = ["initial", "feedback", "spawn"] as const;
+export type TurnKind = (typeof turnKinds)[number];
+export const turnStatuses = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const;
+export type TurnStatus = (typeof turnStatuses)[number];
 
 export type Turn = {
   id: string;
@@ -46,12 +55,22 @@ export type Turn = {
   finishedAt?: Date;
 };
 
+export const runEventKinds = [
+  "log",
+  "status",
+  "system",
+  "model_output",
+  "tool",
+  "usage",
+] as const;
+export type RunEventKind = (typeof runEventKinds)[number];
+
 export type RunEvent = {
   id: string;
   trajectoryId: string;
   turnId: string;
   sequence: number;
-  kind: "log" | "model_output" | "status" | "system" | "tool" | "usage";
+  kind: RunEventKind;
   data: string;
   ts: Date;
 };

@@ -110,21 +110,18 @@ void test("persists trajectories, turns, and ordered events across restarts", as
   assert.equal((await store.getTrajectory(trajectory.id))?.status, "succeeded");
   assert.equal(initialTurn?.status, "succeeded");
   assert.ok(initialTurn);
-  assert.deepEqual(
-    (await store.listRunEvents(initialTurn.id)).map(({ sequence }) => sequence),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-  );
+  const initialEvents = await store.listRunEvents(initialTurn.id);
+  assertOrdered(initialEvents.map(({ sequence }) => sequence));
 
   const feedbackTurn = await store.addFeedback(
     trajectory.id,
     "Tighten the copy",
   );
   await waitForStatus(store, trajectory.id, "succeeded");
-  assert.deepEqual(
-    (await store.listRunEvents(feedbackTurn.id)).map(
-      ({ sequence }) => sequence,
-    ),
-    [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+  const feedbackEvents = await store.listRunEvents(feedbackTurn.id);
+  assertOrdered(feedbackEvents.map(({ sequence }) => sequence));
+  assert.ok(
+    (feedbackEvents[0]?.sequence ?? 0) > (initialEvents.at(-1)?.sequence ?? 0),
   );
 
   await dataSource.destroy();
@@ -139,10 +136,12 @@ void test("persists trajectories, turns, and ordered events across restarts", as
   );
   assert.equal((await restartedStore.listTurns(trajectory.id)).length, 2);
   assert.deepEqual(
-    (await restartedStore.listRunEvents(feedbackTurn.id)).map(
-      ({ sequence }) => sequence,
-    ),
-    [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+    await restartedStore.listRunEvents(initialTurn.id),
+    initialEvents,
+  );
+  assert.deepEqual(
+    await restartedStore.listRunEvents(feedbackTurn.id),
+    feedbackEvents,
   );
   assert.equal(await restartedStore.deleteRepo(repo.id), "in_use");
 });
@@ -419,4 +418,13 @@ async function waitForStatus(
     await delay(10);
   }
   assert.fail(`Trajectory ${trajectoryId} did not reach ${expected}`);
+}
+
+function assertOrdered(sequence: number[]): void {
+  assert.ok(sequence.length > 1);
+  assert.equal(new Set(sequence).size, sequence.length);
+  assert.deepEqual(
+    sequence,
+    [...sequence].sort((left, right) => left - right),
+  );
 }

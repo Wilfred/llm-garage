@@ -7,15 +7,12 @@ import {
   PrimaryColumn,
 } from "typeorm";
 import { TrajectoryEntity } from "./trajectory";
-
-export const turnKinds = ["initial", "feedback", "spawn"] as const;
-export const turnStatuses = [
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "cancelled",
-] as const;
+import {
+  turnKinds,
+  turnStatuses,
+  type TurnKind,
+  type TurnStatus,
+} from "../store/types";
 
 @Entity("turns")
 @Index(["trajectoryId", "createdAt"])
@@ -31,13 +28,13 @@ export class TurnEntity {
   trajectory?: TrajectoryEntity;
 
   @Column("simple-enum", { enum: turnKinds })
-  kind!: (typeof turnKinds)[number];
+  kind!: TurnKind;
 
   @Column("text")
   prompt!: string;
 
   @Column("simple-enum", { enum: turnStatuses })
-  status!: (typeof turnStatuses)[number];
+  status!: TurnStatus;
 
   @Column("datetime")
   createdAt!: Date;
