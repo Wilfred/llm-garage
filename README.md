@@ -24,8 +24,8 @@ use cases.
 (4) Side-by-side trajectories: Allow multiple linked trajectories to start
 with the same prompt, to make A/B testing models easy.
 
-(5) Drive-by trajectories: Allow a trajectory to create a pull request that
-is auto-merged if CI is green.
+(5) Drive-by trajectories: Allow a repository to opt in to auto-merging
+the pull requests its trajectories open, once CI is green.
 
 (6) Spawned trajectories: Allow an active agent to create a durable child
 trajectory for related work that cannot be handled by a short-lived

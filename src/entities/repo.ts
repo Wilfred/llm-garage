@@ -15,6 +15,9 @@ export class RepoEntity {
   @Column("text")
   defaultBranch!: string;
 
+  @Column("boolean", { default: false })
+  autoMerge!: boolean;
+
   @Column("datetime")
   createdAt!: Date;
 }

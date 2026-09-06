@@ -5,6 +5,7 @@ export type Repo = {
   owner: string;
   name: string;
   defaultBranch: string;
+  autoMerge: boolean;
   createdAt: Date;
 };
 
@@ -26,8 +27,6 @@ export type Trajectory = {
   status: TrajectoryStatus;
   modelId: ModelId;
   taskPrompt: string;
-  createPr: boolean;
-  autoMerge: boolean;
   prUrl?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -57,7 +56,10 @@ export type RunEvent = {
   ts: Date;
 };
 
-export type CreateRepoInput = Pick<Repo, "owner" | "name" | "defaultBranch">;
+export type CreateRepoInput = Pick<
+  Repo,
+  "owner" | "name" | "defaultBranch" | "autoMerge"
+>;
 
 export type CreateTrajectoryInput = {
   repoId: string;
@@ -65,8 +67,6 @@ export type CreateTrajectoryInput = {
   title: string;
   modelId: ModelId;
   taskPrompt: string;
-  createPr: boolean;
-  autoMerge: boolean;
 };
 
 export type DeleteRepoResult = "deleted" | "in_use" | "not_found";
@@ -75,6 +75,7 @@ export interface DataStore {
   listRepos(): Promise<Repo[]>;
   getRepo(id: string): Promise<Repo | undefined>;
   createRepo(input: CreateRepoInput): Promise<Repo>;
+  setRepoAutoMerge(id: string, autoMerge: boolean): Promise<boolean>;
   deleteRepo(id: string): Promise<DeleteRepoResult>;
 
   listTrajectories(): Promise<Trajectory[]>;

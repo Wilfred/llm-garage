@@ -62,6 +62,13 @@ export class MemoryDataStore implements DataStore {
     return repo;
   }
 
+  async setRepoAutoMerge(id: string, autoMerge: boolean): Promise<boolean> {
+    const repo = this.repos.get(id);
+    if (!repo) return false;
+    this.repos.set(id, { ...repo, autoMerge });
+    return true;
+  }
+
   async deleteRepo(id: string): Promise<DeleteRepoResult> {
     if (!this.repos.has(id)) return "not_found";
     if (this.repoIsInUse(id)) return "in_use";
@@ -98,8 +105,6 @@ export class MemoryDataStore implements DataStore {
       status: "running",
       modelId: input.modelId,
       taskPrompt: input.taskPrompt,
-      createPr: input.createPr,
-      autoMerge: input.autoMerge,
       createdAt: now,
       updatedAt: now,
     };
@@ -318,6 +323,7 @@ export class MemoryDataStore implements DataStore {
         owner: "Wilfred",
         name: "llm-garage",
         defaultBranch: "main",
+        autoMerge: true,
         createdAt: minutesAgo(9_000),
       },
       {
@@ -325,6 +331,7 @@ export class MemoryDataStore implements DataStore {
         owner: "Wilfred",
         name: "tree-sitter-elisp",
         defaultBranch: "master",
+        autoMerge: false,
         createdAt: minutesAgo(8_000),
       },
       {
@@ -332,6 +339,7 @@ export class MemoryDataStore implements DataStore {
         owner: "Wilfred",
         name: "digital-garden",
         defaultBranch: "main",
+        autoMerge: false,
         createdAt: minutesAgo(7_000),
       },
     ];
@@ -455,8 +463,6 @@ export class MemoryDataStore implements DataStore {
               ? "anthropic/claude-opus-5"
               : "openai/gpt-5.6-sol",
       taskPrompt: title,
-      createPr: id !== "trajectory-parser",
-      autoMerge: id === "trajectory-tests",
       createdAt: minutesAgo(minutes + 15),
       updatedAt: minutesAgo(minutes),
     };

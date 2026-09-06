@@ -78,8 +78,6 @@ export function createTrajectoriesRouter(store: DataStore): Router {
       title: titleFromTask(taskPrompt),
       taskPrompt,
       modelId,
-      createPr: true,
-      autoMerge: false,
     });
     res.redirect(303, `/trajectories/${trajectory.id}`);
   });

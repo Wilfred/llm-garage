@@ -29,6 +29,7 @@ void test("persists repository CRUD across data source restarts", async (t) => {
     owner: "example",
     name: "persistent-project",
     defaultBranch: "trunk",
+    autoMerge: false,
   });
   await dataSource.destroy();
 
@@ -39,6 +40,15 @@ void test("persists repository CRUD across data source restarts", async (t) => {
 
   assert.deepEqual(await store.getRepo(created.id), created);
   assert.equal((await store.listRepos()).length, 4);
+  assert.equal(await store.setRepoAutoMerge(created.id, true), true);
+  await dataSource.destroy();
+
+  dataSource = createAppDataSource(dataDir);
+  await dataSource.initialize();
+  store = new DatabaseDataStore(dataSource);
+  await store.initialize();
+
+  assert.equal((await store.getRepo(created.id))?.autoMerge, true);
   assert.equal(await store.deleteRepo(created.id), "deleted");
   await dataSource.destroy();
 
@@ -71,12 +81,14 @@ void test("persists trajectories, turns, and ordered events across restarts", as
     owner: "example",
     name: "trajectory-project",
     defaultBranch: "main",
+    autoMerge: false,
   });
   await assert.rejects(
     store.createRepo({
       owner: repo.owner,
       name: repo.name,
       defaultBranch: "different",
+      autoMerge: false,
     }),
     RepoAlreadyExistsError,
   );
@@ -86,8 +98,6 @@ void test("persists trajectories, turns, and ordered events across restarts", as
     title: "Persist the trajectory",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Exercise the database store",
-    createPr: false,
-    autoMerge: false,
   });
   const [runningTurn] = await store.listTurns(trajectory.id);
   assert.ok(runningTurn);
@@ -155,14 +165,13 @@ void test("commits cancellation state and its event together", async (t) => {
     owner: "example",
     name: "cancel-project",
     defaultBranch: "main",
+    autoMerge: false,
   });
   const trajectory = await store.createTrajectory({
     repoId: repo.id,
     title: "Cancel the trajectory",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Wait for cancellation",
-    createPr: false,
-    autoMerge: false,
   });
 
   assert.equal(await store.cancelTrajectory(trajectory.id), true);
@@ -198,8 +207,6 @@ void test("rejects invalid trajectory relationships without partial records", as
       title: "Invalid",
       modelId: "openai/gpt-5.6-sol",
       taskPrompt: "Do not persist this",
-      createPr: false,
-      autoMerge: false,
     }),
     /Repository not found/,
   );
@@ -209,19 +216,19 @@ void test("rejects invalid trajectory relationships without partial records", as
     owner: "example",
     name: "first-project",
     defaultBranch: "main",
+    autoMerge: false,
   });
   const secondRepo = await store.createRepo({
     owner: "example",
     name: "second-project",
     defaultBranch: "main",
+    autoMerge: false,
   });
   const parent = await store.createTrajectory({
     repoId: firstRepo.id,
     title: "Parent",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Create the parent",
-    createPr: false,
-    autoMerge: false,
   });
   await waitForStatus(store, parent.id, "succeeded");
 
@@ -232,8 +239,6 @@ void test("rejects invalid trajectory relationships without partial records", as
       title: "Invalid child",
       modelId: "openai/gpt-5.6-sol",
       taskPrompt: "Cross repository boundaries",
-      createPr: false,
-      autoMerge: false,
     }),
     /different repository/,
   );
@@ -265,14 +270,13 @@ void test("persists worker failures and their terminal events", async (t) => {
     owner: "example",
     name: "failure-project",
     defaultBranch: "main",
+    autoMerge: false,
   });
   const trajectory = await store.createTrajectory({
     repoId: repo.id,
     title: "Fail the trajectory",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Exercise failure storage",
-    createPr: false,
-    autoMerge: false,
   });
 
   await waitForStatus(store, trajectory.id, "failed");

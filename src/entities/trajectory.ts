@@ -60,12 +60,6 @@ export class TrajectoryEntity {
   @Column("text")
   taskPrompt!: string;
 
-  @Column("boolean")
-  createPr!: boolean;
-
-  @Column("boolean")
-  autoMerge!: boolean;
-
   @Column("text", { nullable: true })
   prUrl!: string | null;
 
