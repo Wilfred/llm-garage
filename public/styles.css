@@ -239,21 +239,16 @@ code {
   border-radius: 50%;
   background: currentColor;
 }
-.status-running,
-.status-queued {
+.status-active {
   color: var(--blue);
 }
-.status-awaiting_feedback {
-  color: var(--amber);
-}
-.status-succeeded {
+.status-idle {
   color: var(--accent);
 }
-.status-failed,
-.status-cancelled {
+.status-errored {
   color: var(--red);
 }
-.status-archived {
+.status-archive {
   color: var(--muted);
 }
 .button {
@@ -500,26 +495,6 @@ pre.log {
 .repo-list li:last-child {
   padding-bottom: 0;
   border-bottom: 0;
-}
-.tree {
-  list-style: none;
-  padding-left: 0;
-  margin: 0;
-}
-.tree .tree {
-  margin: 0.45rem 0 0 0.8rem;
-  padding-left: 0.9rem;
-  border-left: 1px solid var(--line-strong);
-}
-.tree li + li {
-  margin-top: 0.45rem;
-}
-.tree a {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  color: var(--text);
-  font-size: 0.85rem;
 }
 .system-info {
   display: grid;

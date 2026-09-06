@@ -27,10 +27,10 @@ with the same prompt, to make A/B testing models easy.
 (5) Drive-by sessions: Allow a session to create a pull request that
 is auto-merged if CI is green.
 
-(6) Forked sessions: Allow a session to create new sessions, so an
-issue identified in one session can be spun out to another session to
-enable the user to iterate on it. This enables workflows for larger
-features or bugs that can't be a shortlived subagent.
+(6) Spawned sessions: Allow an active agent to create a durable child
+session for related work that cannot be handled by a short-lived
+subagent. The parent link records provenance; this is not intended to
+be a general user-curated session tree.
 
 **Status: clickable prototype.** The dashboard, repository workflow, and multi-turn
 session flow are available now. Runs are scripted fixtures; Docker agents and GitHub

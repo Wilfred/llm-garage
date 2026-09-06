@@ -67,14 +67,10 @@ export type TurnTranscript = { turn: Turn; events: RunEvent[] };
 export function SessionDetailPage({
   session,
   repo,
-  breadcrumb,
-  tree,
   transcript,
 }: {
   session: Session;
   repo?: Repo;
-  breadcrumb: Session[];
-  tree: Session[];
   transcript: TurnTranscript[];
 }) {
   const model = getModel(session.modelId);
@@ -92,25 +88,14 @@ export function SessionDetailPage({
       <div class="breadcrumb">
         <a href="/sessions">Sessions</a>
         <span>/</span>
-        {breadcrumb.map((item, index) => (
-          <>
-            {index > 0 && <span>/</span>}
-            {item.id === session.id ? (
-              <strong>{item.title}</strong>
-            ) : (
-              <a href={`/sessions/${item.id}`}>{item.title}</a>
-            )}
-          </>
-        ))}
+        <strong>{session.title}</strong>
       </div>
       <div class="page-header">
         <div>
           <StatusBadge status={session.status} />
-          <h1>{session.title}</h1>
           <p>
             {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"} ·{" "}
-            {model.name} via OpenRouter · started{" "}
-            {formatDate(session.createdAt)}
+            {model.name} via OpenRouter · {formatDate(session.createdAt)}
           </p>
         </div>
         <div class="actions">
@@ -130,7 +115,7 @@ export function SessionDetailPage({
           )}
         </div>
       </div>
-      <div class="split">
+      <div class={session.prUrl ? "split" : undefined}>
         <section class="transcript">
           <div class="section-heading">
             <h2>Transcript</h2>
@@ -143,7 +128,6 @@ export function SessionDetailPage({
                   <strong>Turn {index + 1}</strong>{" "}
                   <span class="muted small">· {turn.kind}</span>
                 </div>
-                <span class="muted small">{turn.status}</span>
               </div>
               <p class="turn-prompt">{turn.prompt}</p>
               <pre class="log">
@@ -179,27 +163,17 @@ export function SessionDetailPage({
             </section>
           )}
         </section>
-        <aside class="stack sticky">
-          <section class="card">
-            <h2>Session tree</h2>
-            <SessionTree sessions={tree} currentId={session.id} />
-          </section>
-          <section class="card">
-            <h2>Pull request</h2>
-            {session.prUrl ? (
+        {session.prUrl && (
+          <aside class="stack sticky">
+            <section class="card">
+              <h2>Pull request</h2>
               <a href={session.prUrl}>Open pull request</a>
-            ) : (
-              <p class="muted small">
-                {session.createPr
-                  ? "A pull request will appear here after a real agent completes."
-                  : "Pull-request creation is off for this session."}
-              </p>
-            )}
-            {session.autoMerge && (
-              <p class="muted small">Auto-merge is enabled.</p>
-            )}
-          </section>
-        </aside>
+              {session.autoMerge && (
+                <p class="muted small">Auto-merge is enabled.</p>
+              )}
+            </section>
+          </aside>
+        )}
       </div>
     </Layout>
   );
@@ -233,40 +207,6 @@ export function SessionsPage({
       <SessionCards sessions={sessions} repos={repos} />
     </Layout>
   );
-}
-
-function SessionTree({
-  sessions,
-  currentId,
-}: {
-  sessions: Session[];
-  currentId: string;
-}) {
-  const roots = sessions.filter(
-    ({ parentId }) => !parentId || !sessions.some(({ id }) => id === parentId),
-  );
-  const renderNodes = (nodes: Session[]) => (
-    <ul class="tree">
-      {nodes.map((node) => {
-        const children = sessions.filter(
-          ({ parentId }) => parentId === node.id,
-        );
-        return (
-          <li>
-            <a href={`/sessions/${node.id}`}>
-              <span>
-                {node.id === currentId ? "› " : ""}
-                {node.title}
-              </span>
-              <span class="muted">{node.status.replaceAll("_", " ")}</span>
-            </a>
-            {children.length > 0 && renderNodes(children)}
-          </li>
-        );
-      })}
-    </ul>
-  );
-  return renderNodes(roots);
 }
 
 export function NotFoundPage({

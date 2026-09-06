@@ -95,9 +95,8 @@ export function createSessionsRouter(store: DataStore): Router {
         );
       return;
     }
-    const [repo, sessions, turns] = await Promise.all([
+    const [repo, turns] = await Promise.all([
       store.getRepo(session.repoId),
-      store.listSessions(),
       store.listTurns(session.id),
     ]);
     const transcript: TurnTranscript[] = await Promise.all(
@@ -106,8 +105,6 @@ export function createSessionsRouter(store: DataStore): Router {
         events: await store.listRunEvents(turn.id),
       })),
     );
-    const breadcrumb = buildBreadcrumb(session, sessions);
-    const tree = sessions.filter(({ rootId }) => rootId === session.rootId);
     res
       .type("html")
       .send(
@@ -115,8 +112,6 @@ export function createSessionsRouter(store: DataStore): Router {
           <SessionDetailPage
             session={session}
             {...(repo === undefined ? {} : { repo })}
-            breadcrumb={breadcrumb}
-            tree={tree}
             transcript={transcript}
           />,
         ),
@@ -161,16 +156,4 @@ export function filterSessionsByRepo(
       ? sessions.filter((session) => session.repoId === selectedRepo.id)
       : sessions,
   };
-}
-
-function buildBreadcrumb(session: Session, sessions: Session[]): Session[] {
-  const result: Session[] = [session];
-  let current = session;
-  while (current.parentId) {
-    const parent = sessions.find(({ id }) => id === current.parentId);
-    if (!parent || result.some(({ id }) => id === parent.id)) break;
-    result.unshift(parent);
-    current = parent;
-  }
-  return result;
 }

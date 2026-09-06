@@ -10,9 +10,17 @@ export function formatDate(date: Date): string {
 }
 
 export function StatusBadge({ status }: { status: SessionStatus }) {
-  return (
-    <span class={`status status-${status}`}>{status.replaceAll("_", " ")}</span>
-  );
+  const displayStatus = sessionDisplayStatus(status);
+  return <span class={`status status-${displayStatus}`}>{displayStatus}</span>;
+}
+
+export function sessionDisplayStatus(
+  status: SessionStatus,
+): "active" | "archive" | "errored" | "idle" {
+  if (status === "running") return "active";
+  if (status === "failed") return "errored";
+  if (status === "archived") return "archive";
+  return "idle";
 }
 
 export function EmptyState({ children }: { children: ComponentChildren }) {
