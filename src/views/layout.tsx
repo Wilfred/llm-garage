@@ -64,10 +64,6 @@ export function Layout({
         <main>{children}</main>
         <footer>
           <a href="/about">About</a>
-          <span>
-            Prototype data is held in memory and resets when the server
-            restarts.
-          </span>
         </footer>
       </body>
     </html>
