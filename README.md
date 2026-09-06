@@ -32,16 +32,16 @@ trajectory for related work that cannot be handled by a short-lived
 subagent. The parent link records provenance; this is not intended to
 be a general user-curated trajectory tree.
 
-**Status: clickable prototype.** The dashboard, repository workflow, and multi-turn
-trajectory flow are available now. Runs are scripted fixtures; Docker agents and GitHub
-integration arrive in later milestones. See [PLAN.md](PLAN.md) for the full design and
-milestone roadmap.
+**Status: clickable prototype.** The dashboard, repository workflow, and
+OpenRouter-backed multi-turn trajectory flow are available now. Docker agents and
+GitHub integration arrive in later milestones. See [PLAN.md](PLAN.md) for the full
+design and milestone roadmap.
 
 ## Development
 
 ```sh
 npm install
-cp .env.example .env   # defaults are fine for local dev
+cp .env.example .env   # add your OpenRouter API key
 npm run dev            # tsx watch, http://127.0.0.1:3000
 ```
 
@@ -60,6 +60,8 @@ docker build -t llm-garage .
 docker volume create llm-garage-data
 docker run -d --name llm-garage --restart unless-stopped \
   -p 3000:3000 \
+  --env-file .env \
+  -e HOST=0.0.0.0 \
   --mount source=llm-garage-data,target=/app/data \
   llm-garage
 ```

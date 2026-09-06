@@ -17,10 +17,7 @@ export function NewTrajectoryPage({
       <div class="page-header">
         <div>
           <h1>New trajectory</h1>
-          <p>
-            Runs a scripted local worker. No model calls or repository changes
-            are made yet.
-          </p>
+          <p>Talk to a model through OpenRouter.</p>
         </div>
       </div>
       {error && <div class="notice">{error}</div>}
@@ -54,7 +51,7 @@ export function NewTrajectoryPage({
             placeholder="Describe the outcome you want…"
           />
           <button class="button button-primary" type="submit">
-            Start dummy trajectory
+            Start trajectory
           </button>
         </form>
       )}

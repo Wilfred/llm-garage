@@ -62,16 +62,17 @@ The target feature set is:
 
 ## Current state
 
-Milestones M1-M3 are complete. The repository currently provides:
+Milestones M1-M4 are complete. The repository currently provides:
 
 - an Express 5 application rendered with Preact and JSX;
 - dashboard, repository, trajectory, about, and new-trajectory screens;
 - repository and trajectory catalogues persisted in SQLite;
 - durable turns and ordered trajectory events used by the clickable prototype;
+- tool-free, multi-turn model conversations through OpenRouter;
 - linting, unit and route tests, a production build, and a web-app Docker image.
 
-It does not yet run coding agents, manage Docker sandbox containers, interact
-with GitHub, calculate model costs, or execute comparisons.
+It does not yet run coding tools, manage Docker sandbox containers, interact with
+GitHub, calculate model costs, or execute comparisons.
 
 ## Architecture
 
@@ -237,10 +238,9 @@ accept a pushed commit as its base, but that must be visible in the child record
 ### M1-M3 — Application foundation and clickable prototype (complete)
 
 These milestones established the TypeScript application, server-rendered UI,
-tests, health checks, Docker packaging, and prototype screens. The prototype data
-is deliberately temporary and will be replaced in M4.
+tests, health checks, Docker packaging, and prototype screens.
 
-### M4 — Persistent trajectory catalogue
+### M4 — Persistent trajectory catalogue (complete)
 
 Build:
 

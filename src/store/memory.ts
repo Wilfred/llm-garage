@@ -10,7 +10,7 @@ import type {
 } from "./types";
 import { getModel } from "../models";
 import { DummyWorker } from "../worker/dummy";
-import type { TrajectoryWorker } from "../worker/types";
+import type { ConversationMessage, TrajectoryWorker } from "../worker/types";
 import { RepoAlreadyExistsError } from "./errors";
 
 export type MemoryStoreOptions = {
@@ -203,11 +203,12 @@ export class MemoryDataStore implements DataStore {
     const model = getModel(trajectory.modelId);
     const controller = new AbortController();
     this.activeWorkers.set(trajectoryId, controller);
-    this.addEvent(turnId, "status", `${model.name} dummy worker started`);
+    this.addEvent(turnId, "status", `${model.name} started`);
     void this.worker
       .run({
+        modelId: trajectory.modelId,
         modelName: model.name,
-        taskPrompt: trajectory.taskPrompt,
+        messages: this.conversationMessages(trajectoryId),
         signal: controller.signal,
         emit: ({ kind, data }) => {
           const currentTrajectory = this.trajectories.get(trajectoryId);
@@ -251,6 +252,28 @@ export class MemoryDataStore implements DataStore {
         if (this.activeWorkers.get(trajectoryId) === controller) {
           this.activeWorkers.delete(trajectoryId);
         }
+      });
+  }
+
+  private conversationMessages(trajectoryId: string): ConversationMessage[] {
+    return [...this.turns.values()]
+      .filter((turn) => turn.trajectoryId === trajectoryId)
+      .sort(
+        (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      )
+      .flatMap((turn) => {
+        const output = [...this.events.values()]
+          .filter(
+            (event) =>
+              event.turnId === turn.id && event.kind === "model_output",
+          )
+          .sort((left, right) => left.sequence - right.sequence)
+          .map((event) => event.data)
+          .join("\n");
+        return [
+          { role: "user" as const, content: turn.prompt },
+          ...(output ? [{ role: "assistant" as const, content: output }] : []),
+        ];
       });
   }
 

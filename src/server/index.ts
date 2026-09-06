@@ -1,6 +1,7 @@
 import { config } from "../config";
 import { createAppDataSource } from "../db/data-source";
 import { DatabaseDataStore } from "../store/db";
+import { OpenRouterWorker } from "../worker/openrouter";
 import { createApp } from "./app";
 import type { Express } from "express";
 import type { Server } from "node:http";
@@ -9,7 +10,9 @@ const dataSource = createAppDataSource(config.DATA_DIR);
 
 async function main(): Promise<void> {
   await dataSource.initialize();
-  const store = new DatabaseDataStore(dataSource);
+  const store = new DatabaseDataStore(dataSource, {
+    worker: new OpenRouterWorker({ apiKey: config.OPENROUTER_API_KEY }),
+  });
   await store.initialize();
   const app = createApp(dataSource, store);
 

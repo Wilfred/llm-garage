@@ -9,6 +9,7 @@ import { createAppDataSource } from "../db/data-source";
 import { RepoAlreadyExistsError } from "./errors";
 import { DatabaseDataStore } from "./db";
 import type { DataStore, TrajectoryStatus } from "./types";
+import type { ConversationMessage } from "../worker/types";
 
 void test("persists repository CRUD across data source restarts", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-repos-"));
@@ -181,8 +182,58 @@ void test("commits cancellation state and its event together", async (t) => {
   assert.ok(turn);
   assert.deepEqual(
     (await store.listRunEvents(turn.id)).map(({ data }) => data),
-    ["GPT-5.6 Sol dummy worker started", "Trajectory cancelled by user"],
+    ["GPT-5.6 Sol started", "Trajectory cancelled by user"],
   );
+});
+
+void test("sends persisted conversation history to each worker turn", async (t) => {
+  const dataDir = await mkdtemp(
+    path.join(os.tmpdir(), "llm-garage-conversation-"),
+  );
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const conversations: ConversationMessage[][] = [];
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        conversations.push(context.messages.map((message) => ({ ...message })));
+        context.emit({
+          kind: "model_output",
+          data: conversations.length === 1 ? "First answer" : "Second answer",
+        });
+      },
+    },
+  });
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "conversation-project",
+    defaultBranch: "main",
+    autoMerge: false,
+  });
+  const trajectory = await store.createTrajectory({
+    repoId: repo.id,
+    title: "Have a conversation",
+    modelId: "anthropic/claude-opus-5",
+    taskPrompt: "First question",
+  });
+  await waitForStatus(store, trajectory.id, "succeeded");
+
+  await store.addFeedback(trajectory.id, "Follow-up question");
+  await waitForStatus(store, trajectory.id, "succeeded");
+
+  assert.deepEqual(conversations, [
+    [{ role: "user", content: "First question" }],
+    [
+      { role: "user", content: "First question" },
+      { role: "assistant", content: "First answer" },
+      { role: "user", content: "Follow-up question" },
+    ],
+  ]);
 });
 
 void test("rejects invalid trajectory relationships without partial records", async (t) => {
