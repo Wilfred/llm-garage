@@ -3,6 +3,11 @@
 Always do your work in a git worktree so you don't dirty the current
 checkout.
 
+## UI Style
+
+Keep the interface minimal and information dense. Choose designs that
+work on both desktop and mobile screens.
+
 ## Pull Requests
 
 For implementation work, take ownership of delivery: commit the changes,
