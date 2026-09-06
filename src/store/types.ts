@@ -8,7 +8,7 @@ export type Repo = {
   createdAt: Date;
 };
 
-export type SessionStatus =
+export type TrajectoryStatus =
   | "queued"
   | "running"
   | "awaiting_feedback"
@@ -17,13 +17,13 @@ export type SessionStatus =
   | "cancelled"
   | "archived";
 
-export type Session = {
+export type Trajectory = {
   id: string;
   parentId?: string;
   rootId: string;
   repoId: string;
   title: string;
-  status: SessionStatus;
+  status: TrajectoryStatus;
   modelId: ModelId;
   taskPrompt: string;
   createPr: boolean;
@@ -39,7 +39,7 @@ export type TurnStatus =
 
 export type Turn = {
   id: string;
-  sessionId: string;
+  trajectoryId: string;
   kind: TurnKind;
   prompt: string;
   status: TurnStatus;
@@ -49,7 +49,7 @@ export type Turn = {
 
 export type RunEvent = {
   id: string;
-  sessionId: string;
+  trajectoryId: string;
   turnId: string;
   sequence: number;
   kind: "log" | "model_output" | "status" | "system" | "tool" | "usage";
@@ -59,7 +59,7 @@ export type RunEvent = {
 
 export type CreateRepoInput = Pick<Repo, "owner" | "name" | "defaultBranch">;
 
-export type CreateSessionInput = {
+export type CreateTrajectoryInput = {
   repoId: string;
   parentId?: string;
   title: string;
@@ -77,12 +77,12 @@ export interface DataStore {
   createRepo(input: CreateRepoInput): Promise<Repo>;
   deleteRepo(id: string): Promise<DeleteRepoResult>;
 
-  listSessions(): Promise<Session[]>;
-  getSession(id: string): Promise<Session | undefined>;
-  createSession(input: CreateSessionInput): Promise<Session>;
-  listTurns(sessionId: string): Promise<Turn[]>;
+  listTrajectories(): Promise<Trajectory[]>;
+  getTrajectory(id: string): Promise<Trajectory | undefined>;
+  createTrajectory(input: CreateTrajectoryInput): Promise<Trajectory>;
+  listTurns(trajectoryId: string): Promise<Turn[]>;
   listRunEvents(turnId: string): Promise<RunEvent[]>;
-  addFeedback(sessionId: string, feedback: string): Promise<Turn>;
-  cancelSession(sessionId: string): Promise<boolean>;
-  archiveSession(sessionId: string): Promise<boolean>;
+  addFeedback(trajectoryId: string, feedback: string): Promise<Turn>;
+  cancelTrajectory(trajectoryId: string): Promise<boolean>;
+  archiveTrajectory(trajectoryId: string): Promise<boolean>;
 }

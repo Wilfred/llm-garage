@@ -1,21 +1,21 @@
-import type { Repo, Session } from "../../store/types";
-import { SessionCards } from "../components";
+import type { Repo, Trajectory } from "../../store/types";
+import { TrajectoryCards } from "../components";
 import { Layout } from "../layout";
 
 export function DashboardPage({
   repos,
-  sessions,
+  trajectories,
 }: {
   repos: Repo[];
-  sessions: Session[];
+  trajectories: Trajectory[];
 }) {
-  const active = sessions.filter(
+  const active = trajectories.filter(
     ({ status }) => status === "running" || status === "queued",
   );
-  const awaiting = sessions.filter(
+  const awaiting = trajectories.filter(
     ({ status }) => status === "awaiting_feedback",
   );
-  const recent = sessions
+  const recent = trajectories
     .filter(
       ({ status }) =>
         !["running", "queued", "awaiting_feedback"].includes(status),
@@ -34,21 +34,21 @@ export function DashboardPage({
           <h2>Active</h2>
           <span class="count">{active.length} in progress</span>
         </div>
-        <SessionCards sessions={active} repos={repos} />
+        <TrajectoryCards trajectories={active} repos={repos} />
       </section>
       <section class="dashboard-section">
         <div class="section-heading">
           <h2>Awaiting your feedback</h2>
           <span class="count">{awaiting.length} ready to review</span>
         </div>
-        <SessionCards sessions={awaiting} repos={repos} />
+        <TrajectoryCards trajectories={awaiting} repos={repos} />
       </section>
       <section class="dashboard-section">
         <div class="section-heading">
           <h2>Recent</h2>
           <span class="count">Completed and archived work</span>
         </div>
-        <SessionCards sessions={recent} repos={repos} />
+        <TrajectoryCards trajectories={recent} repos={repos} />
       </section>
     </Layout>
   );

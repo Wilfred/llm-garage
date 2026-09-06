@@ -1,10 +1,10 @@
 # LLM Garage
 
-This is a website that lets you run agentic coding sessions against
+This is a website that lets you run agentic coding trajectories against
 different models. It's intended for both real work and to A/B test
 models to build intuition of their abilities.
 
-Ultimately it spawns agentic sessions on the current host using
+Ultimately it spawns agentic trajectories on the current host using
 Docker.
 
 ## Target Feature Set
@@ -13,27 +13,27 @@ Docker.
 model, similar to Claude Code Web or
 [OpenHands](https://github.com/All-Hands-AI/OpenHands).
 
-(2) Session tracking: For each session, full metadata of prompts,
-output, tool usage, token usage, time taken and cost. Allow sessions
+(2) Trajectory tracking: For each trajectory, full metadata of prompts,
+output, tool usage, token usage, time taken and cost. Allow trajectories
 to be marked public to show to others.
 
-(3) Session feedback: mark which session you think had the best
+(3) Trajectory feedback: mark which trajectory you think had the best
 result, so you can generate a summary of which model is best for your
 use cases.
 
-(4) Side-by-side sessions: Allow multiple linked sessions to start
+(4) Side-by-side trajectories: Allow multiple linked trajectories to start
 with the same prompt, to make A/B testing models easy.
 
-(5) Drive-by sessions: Allow a session to create a pull request that
+(5) Drive-by trajectories: Allow a trajectory to create a pull request that
 is auto-merged if CI is green.
 
-(6) Spawned sessions: Allow an active agent to create a durable child
-session for related work that cannot be handled by a short-lived
+(6) Spawned trajectories: Allow an active agent to create a durable child
+trajectory for related work that cannot be handled by a short-lived
 subagent. The parent link records provenance; this is not intended to
-be a general user-curated session tree.
+be a general user-curated trajectory tree.
 
 **Status: clickable prototype.** The dashboard, repository workflow, and multi-turn
-session flow are available now. Runs are scripted fixtures; Docker agents and GitHub
+trajectory flow are available now. Runs are scripted fixtures; Docker agents and GitHub
 integration arrive in later milestones. See [PLAN.md](PLAN.md) for the full design and
 milestone roadmap.
 
@@ -50,9 +50,8 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 - `npm test` — unit tests
 - `npm run format` — prettier
 
-Repositories are stored in SQLite at `DATA_DIR/app.db` (`data/app.db` by default) and
-survive restarts. Prototype sessions still live in memory and reset whenever the server
-restarts; subsequent M4 work moves them to persistent storage.
+Repositories and trajectories are stored in SQLite at `DATA_DIR/app.db`
+(`data/app.db` by default) and survive restarts.
 
 ## Docker
 

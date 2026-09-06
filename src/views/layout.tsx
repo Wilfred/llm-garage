@@ -1,6 +1,6 @@
 import type { ComponentChildren } from "preact";
 
-export type NavigationSection = "repos" | "sessions";
+export type NavigationSection = "repos" | "trajectories";
 
 const navItems: Array<{
   href: string;
@@ -8,7 +8,7 @@ const navItems: Array<{
   section: NavigationSection;
 }> = [
   { href: "/repos", label: "Repositories", section: "repos" },
-  { href: "/sessions", label: "Sessions", section: "sessions" },
+  { href: "/trajectories", label: "Trajectories", section: "trajectories" },
 ];
 
 export function Layout({
@@ -54,8 +54,11 @@ export function Layout({
               </a>
             ))}
           </nav>
-          <a class="button button-primary header-action" href="/sessions/new">
-            New session
+          <a
+            class="button button-primary header-action"
+            href="/trajectories/new"
+          >
+            New trajectory
           </a>
         </header>
         <main>{children}</main>

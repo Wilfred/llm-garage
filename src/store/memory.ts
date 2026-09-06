@@ -1,22 +1,22 @@
 import type {
   CreateRepoInput,
-  CreateSessionInput,
+  CreateTrajectoryInput,
   DataStore,
   DeleteRepoResult,
   Repo,
   RunEvent,
-  Session,
+  Trajectory,
   Turn,
 } from "./types";
 import { getModel } from "../models";
 import { DummyWorker } from "../worker/dummy";
-import type { SessionWorker } from "../worker/types";
+import type { TrajectoryWorker } from "../worker/types";
 import { RepoAlreadyExistsError } from "./errors";
 
 export type MemoryStoreOptions = {
   seed?: boolean;
   simulationStepMs?: number;
-  worker?: SessionWorker;
+  worker?: TrajectoryWorker;
 };
 
 const minutesAgo = (minutes: number): Date =>
@@ -24,11 +24,11 @@ const minutesAgo = (minutes: number): Date =>
 
 export class MemoryDataStore implements DataStore {
   private readonly repos = new Map<string, Repo>();
-  private readonly sessions = new Map<string, Session>();
+  private readonly trajectories = new Map<string, Trajectory>();
   private readonly turns = new Map<string, Turn>();
   private readonly events = new Map<string, RunEvent>();
   private readonly activeWorkers = new Map<string, AbortController>();
-  private readonly worker: SessionWorker;
+  private readonly worker: TrajectoryWorker;
   private sequence = 100;
   private lastTimestamp = 0;
 
@@ -69,26 +69,27 @@ export class MemoryDataStore implements DataStore {
     return "deleted";
   }
 
-  async listSessions(): Promise<Session[]> {
-    return [...this.sessions.values()].sort(
+  async listTrajectories(): Promise<Trajectory[]> {
+    return [...this.trajectories.values()].sort(
       (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
     );
   }
 
-  async getSession(id: string): Promise<Session | undefined> {
-    return this.sessions.get(id);
+  async getTrajectory(id: string): Promise<Trajectory | undefined> {
+    return this.trajectories.get(id);
   }
 
-  async createSession(input: CreateSessionInput): Promise<Session> {
+  async createTrajectory(input: CreateTrajectoryInput): Promise<Trajectory> {
     if (!(await this.getRepo(input.repoId)))
       throw new Error("Repository not found");
     const parent = input.parentId
-      ? this.sessions.get(input.parentId)
+      ? this.trajectories.get(input.parentId)
       : undefined;
-    if (input.parentId && !parent) throw new Error("Parent session not found");
+    if (input.parentId && !parent)
+      throw new Error("Parent trajectory not found");
     const now = this.now();
-    const id = this.id("session");
-    const session: Session = {
+    const id = this.id("trajectory");
+    const trajectory: Trajectory = {
       id,
       ...(parent ? { parentId: parent.id } : {}),
       rootId: parent?.rootId ?? id,
@@ -102,24 +103,24 @@ export class MemoryDataStore implements DataStore {
       createdAt: now,
       updatedAt: now,
     };
-    this.sessions.set(session.id, session);
+    this.trajectories.set(trajectory.id, trajectory);
 
     const turn: Turn = {
       id: this.id("turn"),
-      sessionId: session.id,
+      trajectoryId: trajectory.id,
       kind: parent ? "spawn" : "initial",
       prompt: input.taskPrompt,
       status: "running",
       createdAt: now,
     };
     this.turns.set(turn.id, turn);
-    this.startWorker(session.id, turn.id);
-    return session;
+    this.startWorker(trajectory.id, turn.id);
+    return trajectory;
   }
 
-  async listTurns(sessionId: string): Promise<Turn[]> {
+  async listTurns(trajectoryId: string): Promise<Turn[]> {
     return [...this.turns.values()]
-      .filter((turn) => turn.sessionId === sessionId)
+      .filter((turn) => turn.trajectoryId === trajectoryId)
       .sort(
         (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
       );
@@ -131,132 +132,132 @@ export class MemoryDataStore implements DataStore {
       .sort((left, right) => left.sequence - right.sequence);
   }
 
-  async addFeedback(sessionId: string, feedback: string): Promise<Turn> {
-    const session = this.sessions.get(sessionId);
-    if (!session) throw new Error("Session not found");
-    if (session.status === "archived" || session.status === "running") {
-      throw new Error("This session cannot accept feedback right now");
+  async addFeedback(trajectoryId: string, feedback: string): Promise<Turn> {
+    const trajectory = this.trajectories.get(trajectoryId);
+    if (!trajectory) throw new Error("Trajectory not found");
+    if (trajectory.status === "archived" || trajectory.status === "running") {
+      throw new Error("This trajectory cannot accept feedback right now");
     }
     const now = this.now();
     const turn: Turn = {
       id: this.id("turn"),
-      sessionId,
+      trajectoryId,
       kind: "feedback",
       prompt: feedback,
       status: "running",
       createdAt: now,
     };
     this.turns.set(turn.id, turn);
-    session.status = "running";
-    session.updatedAt = now;
-    this.startWorker(session.id, turn.id);
+    trajectory.status = "running";
+    trajectory.updatedAt = now;
+    this.startWorker(trajectory.id, turn.id);
     return turn;
   }
 
-  async cancelSession(sessionId: string): Promise<boolean> {
-    const session = this.sessions.get(sessionId);
+  async cancelTrajectory(trajectoryId: string): Promise<boolean> {
+    const trajectory = this.trajectories.get(trajectoryId);
     if (
-      !session ||
-      (session.status !== "running" && session.status !== "queued")
+      !trajectory ||
+      (trajectory.status !== "running" && trajectory.status !== "queued")
     )
       return false;
-    this.stopWorker(session.id);
-    session.status = "cancelled";
-    session.updatedAt = this.now();
-    const turn = this.activeTurn(session.id);
+    this.stopWorker(trajectory.id);
+    trajectory.status = "cancelled";
+    trajectory.updatedAt = this.now();
+    const turn = this.activeTurn(trajectory.id);
     if (turn) {
       turn.status = "cancelled";
       turn.finishedAt = this.now();
-      this.addEvent(turn.id, "status", "Session cancelled by user");
+      this.addEvent(turn.id, "status", "Trajectory cancelled by user");
     }
     return true;
   }
 
-  async archiveSession(sessionId: string): Promise<boolean> {
-    const session = this.sessions.get(sessionId);
-    if (!session || session.status === "archived") return false;
-    this.stopWorker(session.id);
-    const turn = this.activeTurn(session.id);
+  async archiveTrajectory(trajectoryId: string): Promise<boolean> {
+    const trajectory = this.trajectories.get(trajectoryId);
+    if (!trajectory || trajectory.status === "archived") return false;
+    this.stopWorker(trajectory.id);
+    const turn = this.activeTurn(trajectory.id);
     if (turn) {
       turn.status = "cancelled";
       turn.finishedAt = this.now();
       this.addEvent(
         turn.id,
         "status",
-        "Turn stopped because the session was archived",
+        "Turn stopped because the trajectory was archived",
       );
     }
-    session.status = "archived";
-    session.updatedAt = this.now();
+    trajectory.status = "archived";
+    trajectory.updatedAt = this.now();
     return true;
   }
 
-  private startWorker(sessionId: string, turnId: string): void {
-    const session = this.sessions.get(sessionId);
-    if (!session) return;
-    const model = getModel(session.modelId);
+  private startWorker(trajectoryId: string, turnId: string): void {
+    const trajectory = this.trajectories.get(trajectoryId);
+    if (!trajectory) return;
+    const model = getModel(trajectory.modelId);
     const controller = new AbortController();
-    this.activeWorkers.set(sessionId, controller);
+    this.activeWorkers.set(trajectoryId, controller);
     this.addEvent(turnId, "status", `${model.name} dummy worker started`);
     void this.worker
       .run({
         modelName: model.name,
-        taskPrompt: session.taskPrompt,
+        taskPrompt: trajectory.taskPrompt,
         signal: controller.signal,
         emit: ({ kind, data }) => {
-          const currentSession = this.sessions.get(sessionId);
+          const currentTrajectory = this.trajectories.get(trajectoryId);
           const turn = this.turns.get(turnId);
           if (
-            currentSession?.status === "running" &&
+            currentTrajectory?.status === "running" &&
             turn?.status === "running"
           ) {
             this.addEvent(turnId, kind, data);
-            currentSession.updatedAt = this.now();
+            currentTrajectory.updatedAt = this.now();
           }
         },
       })
       .then(() => {
-        const session = this.sessions.get(sessionId);
+        const trajectory = this.trajectories.get(trajectoryId);
         const turn = this.turns.get(turnId);
-        if (session?.status === "running" && turn?.status === "running") {
+        if (trajectory?.status === "running" && turn?.status === "running") {
           turn.status = "succeeded";
           turn.finishedAt = this.now();
-          session.status = "succeeded";
-          session.updatedAt = this.now();
-          this.addEvent(turnId, "status", "Session finished");
+          trajectory.status = "succeeded";
+          trajectory.updatedAt = this.now();
+          this.addEvent(turnId, "status", "Trajectory finished");
         }
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        const session = this.sessions.get(sessionId);
+        const trajectory = this.trajectories.get(trajectoryId);
         const turn = this.turns.get(turnId);
-        if (session?.status === "running" && turn?.status === "running") {
+        if (trajectory?.status === "running" && turn?.status === "running") {
           turn.status = "failed";
           turn.finishedAt = this.now();
-          session.status = "failed";
-          session.updatedAt = this.now();
+          trajectory.status = "failed";
+          trajectory.updatedAt = this.now();
           const message =
             error instanceof Error ? error.message : String(error);
           this.addEvent(turnId, "system", `Worker failed: ${message}`);
-          this.addEvent(turnId, "status", "Session failed");
+          this.addEvent(turnId, "status", "Trajectory failed");
         }
       })
       .finally(() => {
-        if (this.activeWorkers.get(sessionId) === controller) {
-          this.activeWorkers.delete(sessionId);
+        if (this.activeWorkers.get(trajectoryId) === controller) {
+          this.activeWorkers.delete(trajectoryId);
         }
       });
   }
 
-  private stopWorker(sessionId: string): void {
-    this.activeWorkers.get(sessionId)?.abort();
-    this.activeWorkers.delete(sessionId);
+  private stopWorker(trajectoryId: string): void {
+    this.activeWorkers.get(trajectoryId)?.abort();
+    this.activeWorkers.delete(trajectoryId);
   }
 
-  private activeTurn(sessionId: string): Turn | undefined {
+  private activeTurn(trajectoryId: string): Turn | undefined {
     return [...this.turns.values()].find(
       (turn) =>
-        turn.sessionId === sessionId &&
+        turn.trajectoryId === trajectoryId &&
         (turn.status === "running" || turn.status === "queued"),
     );
   }
@@ -273,12 +274,12 @@ export class MemoryDataStore implements DataStore {
       Math.max(
         0,
         ...[...this.events.values()]
-          .filter((event) => event.sessionId === turn.sessionId)
+          .filter((event) => event.trajectoryId === turn.trajectoryId)
           .map((event) => event.sequence),
       ) + 1;
     const event: RunEvent = {
       id: this.id("event"),
-      sessionId: turn.sessionId,
+      trajectoryId: turn.trajectoryId,
       turnId,
       sequence,
       kind,
@@ -305,7 +306,9 @@ export class MemoryDataStore implements DataStore {
   }
 
   protected repoIsInUse(id: string): boolean {
-    return [...this.sessions.values()].some((session) => session.repoId === id);
+    return [...this.trajectories.values()].some(
+      (trajectory) => trajectory.repoId === id,
+    );
   }
 
   private seed(): void {
@@ -334,125 +337,126 @@ export class MemoryDataStore implements DataStore {
     ];
     for (const repo of repos) this.repos.set(repo.id, repo);
 
-    const sessions: Session[] = [
-      this.fixtureSession(
-        "session-m3",
-        "Prototype the session UI",
+    const trajectories: Trajectory[] = [
+      this.fixtureTrajectory(
+        "trajectory-m3",
+        "Prototype the trajectory UI",
         "repo-garage",
         "running",
         32,
       ),
-      this.fixtureSession(
-        "session-navigation",
+      this.fixtureTrajectory(
+        "trajectory-navigation",
         "Tighten dashboard navigation",
         "repo-garage",
         "awaiting_feedback",
         24,
-        "session-m3",
+        "trajectory-m3",
       ),
-      this.fixtureSession(
-        "session-tests",
+      this.fixtureTrajectory(
+        "trajectory-tests",
         "Add rendering safety tests",
         "repo-garage",
         "succeeded",
         18,
-        "session-m3",
+        "trajectory-m3",
       ),
-      this.fixtureSession(
-        "session-parser",
+      this.fixtureTrajectory(
+        "trajectory-parser",
         "Investigate bytecode parse failure",
         "repo-parser",
         "failed",
         140,
       ),
-      this.fixtureSession(
-        "session-docs",
+      this.fixtureTrajectory(
+        "trajectory-docs",
         "Refresh project notes",
         "repo-notes",
         "archived",
         1_400,
       ),
-      this.fixtureSession(
-        "session-queued",
+      this.fixtureTrajectory(
+        "trajectory-queued",
         "Audit mobile spacing",
         "repo-garage",
         "queued",
         8,
-        "session-m3",
+        "trajectory-m3",
       ),
     ];
-    for (const session of sessions) this.sessions.set(session.id, session);
+    for (const trajectory of trajectories)
+      this.trajectories.set(trajectory.id, trajectory);
 
-    for (const session of sessions) {
+    for (const trajectory of trajectories) {
       const status =
-        session.status === "running" || session.status === "queued"
-          ? session.status
-          : session.status === "failed"
+        trajectory.status === "running" || trajectory.status === "queued"
+          ? trajectory.status
+          : trajectory.status === "failed"
             ? "failed"
             : "succeeded";
       const turn: Turn = {
-        id: `turn-${session.id}`,
-        sessionId: session.id,
-        kind: session.parentId ? "spawn" : "initial",
-        prompt: session.taskPrompt,
+        id: `turn-${trajectory.id}`,
+        trajectoryId: trajectory.id,
+        kind: trajectory.parentId ? "spawn" : "initial",
+        prompt: trajectory.taskPrompt,
         status,
-        createdAt: session.createdAt,
+        createdAt: trajectory.createdAt,
         ...(status === "running" || status === "queued"
           ? {}
-          : { finishedAt: session.updatedAt }),
+          : { finishedAt: trajectory.updatedAt }),
       };
       this.turns.set(turn.id, turn);
       this.addEvent(
         turn.id,
         "status",
         status === "running"
-          ? `${getModel(session.modelId).name} is working via OpenRouter`
-          : `Session ${status}`,
-        session.createdAt,
+          ? `${getModel(trajectory.modelId).name} is working via OpenRouter`
+          : `Trajectory ${status}`,
+        trajectory.createdAt,
       );
       this.addEvent(
         turn.id,
         "log",
-        `Loaded ${session.repoId} on a prototype workspace`,
+        `Loaded ${trajectory.repoId} on a prototype workspace`,
         minutesAgo(Math.max(1, 30)),
       );
       this.addEvent(
         turn.id,
         "log",
-        session.status === "failed"
+        trajectory.status === "failed"
           ? "Command exited with status 1 (fixture)"
           : "Reviewed the requested files (fixture)",
-        session.updatedAt,
+        trajectory.updatedAt,
       );
     }
   }
 
-  private fixtureSession(
+  private fixtureTrajectory(
     id: string,
     title: string,
     repoId: string,
-    status: Session["status"],
+    status: Trajectory["status"],
     minutes: number,
     parentId?: string,
-  ): Session {
+  ): Trajectory {
     return {
       id,
       ...(parentId === undefined ? {} : { parentId }),
-      rootId: parentId ? "session-m3" : id,
+      rootId: parentId ? "trajectory-m3" : id,
       repoId,
       title,
       status,
       modelId:
-        id === "session-docs"
+        id === "trajectory-docs"
           ? "z-ai/glm-5.2"
-          : id === "session-parser"
+          : id === "trajectory-parser"
             ? "moonshotai/kimi-k3"
-            : id === "session-tests"
+            : id === "trajectory-tests"
               ? "anthropic/claude-opus-5"
               : "openai/gpt-5.6-sol",
       taskPrompt: title,
-      createPr: id !== "session-parser",
-      autoMerge: id === "session-tests",
+      createPr: id !== "trajectory-parser",
+      autoMerge: id === "trajectory-tests",
       createdAt: minutesAgo(minutes + 15),
       updatedAt: minutesAgo(minutes),
     };

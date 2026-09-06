@@ -7,7 +7,7 @@ there.
 
 ## Product direction
 
-LLM Garage runs agentic coding sessions against different models on the current
+LLM Garage runs agentic coding trajectories against different models on the current
 host using Docker. It serves two related jobs:
 
 1. Complete real coding work and open a pull request.
@@ -16,48 +16,48 @@ host using Docker. It serves two related jobs:
 
 The target feature set is:
 
-1. Start a session for a GitHub repository, task prompt, and model, and create a
+1. Start a trajectory for a GitHub repository, task prompt, and model, and create a
    pull request from the result.
-2. Record the complete session: prompt, model output, tool usage, tokens, elapsed
-   time, cost and its source, status, and delivery result. A session can be shared
+2. Record the complete trajectory: prompt, model output, tool usage, tokens, elapsed
+   time, cost and its source, status, and delivery result. A trajectory can be shared
    publicly by its owner.
 3. Let the user choose the best result from a comparison and summarize model
    performance over time.
-4. Run linked sessions from the same prompt and source revision for side-by-side
+4. Run linked trajectories from the same prompt and source revision for side-by-side
    A/B testing.
-5. Optionally auto-merge a session's pull request when its required CI checks
+5. Optionally auto-merge a trajectory's pull request when its required CI checks
    pass.
-6. Let an agent spawn a durable child session for related work without relying
+6. Let an agent spawn a durable child trajectory for related work without relying
    on short-lived subagents.
 
 ## Scope and principles
 
-- A `Session` is the durable unit from the beginning. There is no temporary
+- A `Trajectory` is the durable unit from the beginning. There is no temporary
   `Run` abstraction to rename later.
-- A session represents one top-level agent execution. Retrying, following up,
-  or splitting work creates another linked session and preserves the original.
+- A trajectory represents one top-level agent execution. Retrying, following up,
+  or splitting work creates another linked trajectory and preserves the original.
 - Model identity and runner implementation are separate. A model is what the
   user selects and evaluates; a runner is the adapter that invokes an agent.
-- A/B comparison membership and spawned-session provenance are separate
+- A/B comparison membership and spawned-trajectory provenance are separate
   relationships. A parent link records where a child came from; it is not a
-  user-curated hierarchy, and the product does not need a general session-tree
+  user-curated hierarchy, and the product does not need a general trajectory-tree
   UI. Direct parent or child links can be added later if they prove useful.
 - Execution state and pull-request delivery state are separate state machines.
-  A coding session can succeed even if pushing a branch or merging a PR fails.
-- Every session is reproducible from its stored repository, exact base commit,
+  A coding trajectory can succeed even if pushing a branch or merging a PR fails.
+- Every trajectory is reproducible from its stored repository, exact base commit,
   prompt, model configuration, agent protocol version, and tool definitions.
 - Secrets are provided only to the process that needs them and never persisted
   in event payloads, logs, or public views.
 - The UI remains server-rendered with Preact and progressively enhanced where
   live updates are valuable. A single-page application is not required.
-- There is no prompt-library feature. The task prompt belongs to its session;
-  runner-generated instructions may be stored as a session snapshot for audit.
+- There is no prompt-library feature. The task prompt belongs to its trajectory;
+  runner-generated instructions may be stored as a trajectory snapshot for audit.
 - The first real agent uses OpenRouter's Agent SDK. LLM Garage owns the coding
   tools, limits, and durable event history; the SDK owns the model conversation
-  and tool-calling loop. Tools execute in the session's Docker workspace. The
+  and tool-calling loop. Tools execute in the trajectory's Docker workspace. The
   agent contract must remain replaceable without changing stored history.
 - The first deployment remains a single trusted operator on one host. Public
-  session links are in scope; a general multi-user account and permissions
+  trajectory links are in scope; a general multi-user account and permissions
   system is not.
 
 ## Current state
@@ -65,9 +65,9 @@ The target feature set is:
 Milestones M1-M3 are complete. The repository currently provides:
 
 - an Express 5 application rendered with Preact and JSX;
-- dashboard, repository, session, about, and new-session screens;
-- repository and session catalogues persisted in SQLite;
-- durable turns and ordered session events used by the clickable prototype;
+- dashboard, repository, trajectory, about, and new-trajectory screens;
+- repository and trajectory catalogues persisted in SQLite;
+- durable turns and ordered trajectory events used by the clickable prototype;
 - linting, unit and route tests, a production build, and a web-app Docker image.
 
 It does not yet run coding agents, manage Docker sandbox containers, interact
@@ -76,20 +76,20 @@ with GitHub, calculate model costs, or execute comparisons.
 ## Architecture
 
 The web process owns the product database, scheduling decisions, and GitHub API
-operations. Each running session gets a separate Docker container and workspace.
+operations. Each running trajectory gets a separate Docker container and workspace.
 
 ```text
 Browser
    |
 Express + Preact SSR
-   |-- SQLite: repositories, sessions, events, comparisons
+   |-- SQLite: repositories, trajectories, events, comparisons
    |-- scheduler: bounded local queue and recovery
    |-- GitHub: repository metadata, pull requests, checks, merge
    |
 Docker engine
-   |-- session container + isolated workspace volume
+   |-- trajectory container + isolated workspace volume
    |     `-- coding tools: read, search, patch, and command execution
-   `-- session container + isolated workspace volume
+   `-- trajectory container + isolated workspace volume
 
 OpenRouter API
    `-- selected model <-> OpenRouter Agent SDK in the web process
@@ -105,23 +105,23 @@ model.
 `DataStore` owns durable product records and transaction boundaries. Route
 handlers use it instead of accessing SQLite or prototype fixtures directly.
 
-`Runner` turns a session specification into normalized events and workspace
+`Runner` turns a trajectory specification into normalized events and workspace
 changes. Initial implementations are:
 
 - `EchoRunner`, a deterministic test runner with no external credentials;
-- `OpenRouterRunner`, which adapts OpenRouter's Agent SDK to normalized session
-  events and exposes approved coding tools backed by the session's `Sandbox`.
+- `OpenRouterRunner`, which adapts OpenRouter's Agent SDK to normalized trajectory
+  events and exposes approved coding tools backed by the trajectory's `Sandbox`.
 
 `ModelSpec` is configuration rather than a database-owned model. It contains a
 stable ID, display name, OpenRouter model slug, required capabilities, inference
 limits, provider-routing policy, and optional fallback prices for estimation. The
-selected spec and request configuration are snapshotted onto a session so history
+selected spec and request configuration are snapshotted onto a trajectory so history
 does not change when configuration changes. Cross-model fallback is disabled for
-evaluated sessions: a session must run the model the user selected. Provider
-fallback for that same model is allowed when configured and is recorded in session
+evaluated trajectories: a trajectory must run the model the user selected. Provider
+fallback for that same model is allowed when configured and is recorded in trajectory
 metadata.
 
-`SessionScheduler` starts queued work up to a configurable concurrency limit,
+`TrajectoryScheduler` starts queued work up to a configurable concurrency limit,
 records every state transition, supports cancellation, and recovers interrupted
 work after process restart.
 
@@ -140,26 +140,26 @@ JSON only when it is useful for debugging or future presentation.
 
 ### Repository
 
-The repository catalogue identifies the GitHub project selected for a session.
+The repository catalogue identifies the GitHub project selected for a trajectory.
 GitHub metadata needed for checkout will be added to its entity when repository
 resolution is implemented.
 
-### Session
+### Trajectory
 
-Sessions own durable turns and an append-only event ledger. Derived session
+Trajectories own durable turns and an append-only event ledger. Derived trajectory
 fields keep list pages efficient, while status changes and their events are
 committed together. Unknown usage or cost stays explicitly unknown rather than
 being represented as zero; estimates are labelled and use snapshotted pricing.
 
-### Session event
+### Trajectory event
 
-Events have a stable, session-wide order so they can later back resumable live
+Events have a stable, trajectory-wide order so they can later back resumable live
 updates. Provider and tool payloads must be redacted before they reach this
 ledger.
 
 ### Comparison
 
-A comparison groups two to four sessions created from the same repository,
+A comparison groups two to four trajectories created from the same repository,
 prompt, and base commit. Its entity will be added with the comparison milestone;
 membership remains distinct from parent/child lineage.
 
@@ -170,41 +170,41 @@ environment-provided credentials remain outside ordinary product records.
 
 ## Principal flows
 
-### Single session
+### Single trajectory
 
 1. The user selects a repository, task, model, and delivery mode.
 2. The app resolves and stores the repository's exact base commit and snapshots
    the model configuration.
-3. A transaction creates the queued session and its first event.
+3. A transaction creates the queued trajectory and its first event.
 4. The scheduler assigns an isolated Docker workspace and invokes the runner.
-5. Runner output is normalized into events and summarized on the session.
+5. Runner output is normalized into events and summarized on the trajectory.
 6. On success, the user can inspect the diff and create a pull request, unless
    pull-request or auto-merge delivery was selected at creation time.
 
 ### Side-by-side comparison
 
 1. The user selects one repository, one prompt, and two to four models.
-2. The app resolves one base SHA and creates the comparison and member sessions
+2. The app resolves one base SHA and creates the comparison and member trajectories
    atomically.
 3. Members execute independently under the normal concurrency limit.
 4. The comparison page shows status, output, diff, tool activity, tokens, time,
    and cost in aligned columns, including whether cost is reported or estimated.
-5. The user selects a winner and can deliver that session as a pull request.
+5. The user selects a winner and can deliver that trajectory as a pull request.
 6. Aggregate reporting updates model starts, completions, wins, win rate, elapsed
    time, and cost, with repository filtering.
 
-### Public session
+### Public trajectory
 
 Publishing is an explicit owner action with a warning that code and prompts may
 contain sensitive information. Public rendering uses an allowlist of fields and
-events rather than reusing an unrestricted private-session response. Private
-session IDs return not found on the public route. Secrets and environment values
+events rather than reusing an unrestricted private-trajectory response. Private
+trajectory IDs return not found on the public route. Secrets and environment values
 are redacted before persistence, not merely hidden at render time.
 
-### Spawned child session
+### Spawned child trajectory
 
-An authorized running agent can create a child session for related work. The
-child records its source session for provenance, uses a fresh independent
+An authorized running agent can create a child trajectory for related work. The
+child records its source trajectory for provenance, uses a fresh independent
 workspace, and starts from the parent's recorded base SHA by default. It does not
 implicitly inherit uncommitted filesystem state. A later version may explicitly
 accept a pushed commit as its base, but that must be visible in the child record.
@@ -213,23 +213,23 @@ accept a pushed commit as its base, but that must be visible in the child record
 
 - Run sandboxes as a non-root user with CPU, memory, process, disk, and time
   limits. Apply identifying Docker labels and deny privileged mode.
-- Give each session a named workspace volume and branch. Never share a writable
-  checkout between sessions.
+- Give each trajectory a named workspace volume and branch. Never share a writable
+  checkout between trajectories.
 - Inject the GitHub credential only into narrowly scoped clone/push operations,
   using an askpass helper or equivalent. Do not expose it to the agent process.
 - Keep the OpenRouter credential in the web process that performs inference. It
   must never enter a sandbox container or tool result. Scrub credential values
   and known token patterns before storing or broadcasting events.
 - Validate repository URLs, branch names, model IDs, callback payloads, and all
-  session/comparison ownership relationships at service boundaries.
+  trajectory/comparison ownership relationships at service boundaries.
 - Use parameterized database access, protected state-transition helpers, and
   idempotency keys for enqueue, delivery, and merge operations.
-- On startup, reconcile `running` sessions and in-progress delivery records with
+- On startup, reconcile `running` trajectories and in-progress delivery records with
   Docker and GitHub. A restart must not silently duplicate an agent or PR.
 - Keep completed workspaces until explicitly archived or an operator retention
   policy expires. Archival removes the Docker resources only after the final diff
   and metadata are durable.
-- Emit structured application logs with session IDs but without prompt bodies,
+- Emit structured application logs with trajectory IDs but without prompt bodies,
   source code, credentials, or raw provider requests.
 
 ## Milestones
@@ -240,25 +240,25 @@ These milestones established the TypeScript application, server-rendered UI,
 tests, health checks, Docker packaging, and prototype screens. The prototype data
 is deliberately temporary and will be replaced in M4.
 
-### M4 — Persistent session catalogue
+### M4 — Persistent trajectory catalogue
 
 Build:
 
-- Add SQLite migrations and database implementations for repositories, sessions,
-  session events, and comparisons.
+- Add SQLite migrations and database implementations for repositories, trajectories,
+  trajectory events, and comparisons.
 - Replace production fixture data with `DataStore` calls while retaining explicit
   test factories.
-- Make repository creation, the session form, session lists, and session detail
+- Make repository creation, the trajectory form, trajectory lists, and trajectory detail
   operate on persistent records.
-- Store a forward-compatible session snapshot: prompt, selected model, resolved
+- Store a forward-compatible trajectory snapshot: prompt, selected model, resolved
   base SHA, execution/delivery states, visibility, metrics, and relationships.
-- Add transactional helpers for creating a session and appending state events.
+- Add transactional helpers for creating a trajectory and appending state events.
 
 Definition of done:
 
-- A repository and a placeholder session survive an application restart.
+- A repository and a placeholder trajectory survive an application restart.
 - Invalid model, repository, status, and relationship values are rejected.
-- Session events retain stable ordering and status/event writes cannot diverge.
+- Trajectory events retain stable ordering and status/event writes cannot diverge.
 - The application no longer depends on seeded prototype records in production.
 - Unit, route, migration, build, lint, and container smoke tests pass.
 
@@ -266,22 +266,22 @@ Definition of done:
 
 Build:
 
-- Define `Runner`, `ModelSpec`, `SessionScheduler`, and normalized event contracts.
+- Define `Runner`, `ModelSpec`, `TrajectoryScheduler`, and normalized event contracts.
 - Add a bounded in-process queue with configurable concurrency, cancellation,
   timeouts, and durable state transitions.
 - Implement deterministic `EchoRunner` success, failure, tool-event, and usage
   scenarios without external services.
 - Stream runner events into the ledger and maintain derived summary and metric
   fields.
-- Reconcile queued and interrupted sessions safely on startup.
+- Reconcile queued and interrupted trajectories safely on startup.
 
 Definition of done:
 
-- Three Echo sessions execute with a configured concurrency of two.
+- Three Echo trajectories execute with a configured concurrency of two.
 - Success, failure, cancellation, timeout, and restart recovery are covered by
   integration tests.
 - Each status change and runner event is durable and ordered.
-- Duplicate enqueue requests do not execute a session twice.
+- Duplicate enqueue requests do not execute a trajectory twice.
 
 ### M6 — Docker workspaces and repository checkout
 
@@ -291,7 +291,7 @@ Build:
   minimum required tools.
 - Implement the `Sandbox` contract with Dockerode: create, execute, stream, stop,
   inspect, archive, and clean up.
-- Allocate one labelled container and named volume per session and check out the
+- Allocate one labelled container and named volume per trajectory and check out the
   exact stored base SHA onto a unique branch.
 - Apply runtime resource limits and an execution deadline.
 - Capture the final Git status, diff, and diff statistics before cleanup.
@@ -300,10 +300,10 @@ Build:
 
 Definition of done:
 
-- A queued session checks out the expected commit in an isolated container and
+- A queued trajectory checks out the expected commit in an isolated container and
   its resulting diff is visible after completion.
-- Concurrent sessions cannot see or alter one another's files.
-- Cancellation stops the container, while archival removes only that session's
+- Concurrent trajectories cannot see or alter one another's files.
+- Cancellation stops the container, while archival removes only that trajectory's
   labelled resources.
 - Clone authentication is not visible to the runner or recorded events.
 - Docker integration tests cover success, timeout, cancellation, and cleanup.
@@ -329,25 +329,25 @@ Build:
   OpenRouter model slugs that support tool calling. Send provider settings that
   require tool parameters and do not allow fallback to a different model.
 - Snapshot the selected model, agent protocol/tool versions, inference limits,
-  and provider-routing settings on every session.
+  and provider-routing settings on every trajectory.
 - Populate the final summary, tool activity, OpenRouter request/generation IDs,
   upstream model/provider metadata when available, token categories, elapsed
   time, and provider-reported cost. Preserve unknown values honestly when the
   API omits them.
 - Enforce maximum agent steps, wall time, tool output, context growth, and
-  per-session spend. A limit produces a clear terminal event rather than an
+  per-trajectory spend. A limit produces a clear terminal event rather than an
   unbounded loop.
-- Present model selection and recorded telemetry on session screens.
+- Present model selection and recorded telemetry on trajectory screens.
 
 Definition of done:
 
-- A real session can run against each of two configured model choices and modify
+- A real trajectory can run against each of two configured model choices and modify
   its checked-out repository.
 - The same runner and tool definitions work for both models without
   provider-specific branches in the agent loop.
 - Structured model, tool, and usage events survive restart; the OpenRouter key is
   absent from the sandbox, database, logs, and streamed payloads.
-- The sum of per-request usage agrees with stored session token counts and
+- The sum of per-request usage agrees with stored trajectory token counts and
   provider-reported cost.
 - Invalid tool arguments, path escape attempts, malformed responses, missing
   credentials, rate limits, agent limits, and provider interruption end in clear
@@ -357,12 +357,12 @@ Definition of done:
 
 Build:
 
-- Generate collision-resistant branch names and commit successful session
+- Generate collision-resistant branch names and commit successful trajectory
   changes with an explicit fallback message.
 - Push through a credential-isolated Git operation and open a pull request through
   the GitHub API.
-- Support delivery selected at session creation and a manual `Create pull
-request` action after reviewing a completed session.
+- Support delivery selected at trajectory creation and a manual `Create pull
+request` action after reviewing a completed trajectory.
 - Persist branch, commit, PR, and delivery-state metadata independently from
   execution state.
 - Make delivery jobs idempotent and restart-safe; retries reuse the same branch
@@ -370,33 +370,33 @@ request` action after reviewing a completed session.
 
 Definition of done:
 
-- A successful session opens a correctly based pull request containing its diff.
-- A session with `none` delivery can be reviewed and delivered later.
+- A successful trajectory opens a correctly based pull request containing its diff.
+- A trajectory with `none` delivery can be reviewed and delivered later.
 - Empty diffs, push rejection, duplicate requests, API failure, and restart during
   delivery are handled without duplicate PRs.
 - GitHub credentials never appear in the runner environment, database, logs, or
   rendered pages.
 
-### M9 — Complete session history and public sharing
+### M9 — Complete trajectory history and public sharing
 
 Build:
 
-- Add resumable server-sent events with sequence IDs for live session updates.
-- Expand private session detail to show prompt, model metadata, timeline, output,
+- Add resumable server-sent events with sequence IDs for live trajectory updates.
+- Expand private trajectory detail to show prompt, model metadata, timeline, output,
   tool usage, diff, tokens, elapsed time, cost and its source, and delivery outcome.
-- Add explicit publish/unpublish actions and a read-only public session route.
+- Add explicit publish/unpublish actions and a read-only public trajectory route.
 - Define and test a public-field allowlist, event redaction policy, and safe error
   presentation.
-- Make completed sessions searchable/filterable by repository, model, state, and
+- Make completed trajectories searchable/filterable by repository, model, state, and
   visibility.
 
 Definition of done:
 
 - Two browser tabs receive ordered live updates and reconnect without gaps or
   duplicate presentation.
-- A completed session exposes all metadata listed in the README to its owner.
+- A completed trajectory exposes all metadata listed in the README to its owner.
 - A public link works without private access and contains only allowlisted data;
-  an unpublished session returns not found from the public route.
+  an unpublished trajectory returns not found from the public route.
 - Publishing and unpublishing are audited and covered by route tests.
 
 ### M10 — Side-by-side comparisons and feedback
@@ -406,10 +406,10 @@ Build:
 - Add a comparison form that accepts one repository, one prompt, and two to four
   distinct model choices.
 - Resolve one base SHA and transactionally create the comparison and all member
-  sessions with matching inputs.
+  trajectories with matching inputs.
 - Build an aligned comparison view for status, output, diff, tool activity,
   tokens, elapsed time, and cost.
-- Let the user select or change a winning session and record an optional note.
+- Let the user select or change a winning trajectory and record an optional note.
 - Add model reporting for starts, completions, wins, win rate, elapsed time, and
   cost, overall and filtered by repository.
 - Allow the winning result to enter normal pull-request delivery.
@@ -422,7 +422,7 @@ Definition of done:
 - Selecting a winner immediately and correctly updates aggregate reporting.
 - Refreshes and restarts preserve comparison membership and feedback.
 
-### M11 — Drive-by sessions and auto-merge
+### M11 — Drive-by trajectories and auto-merge
 
 Build:
 
@@ -433,7 +433,7 @@ Build:
 - Persist check observations and resume monitoring after application restart.
 - Merge with an operator-configured method only when the expected head SHA is
   still current and all required policy conditions pass.
-- Surface pending, blocked, failed, and merged outcomes on session pages.
+- Surface pending, blocked, failed, and merged outcomes on trajectory pages.
 
 Definition of done:
 
@@ -442,13 +442,13 @@ Definition of done:
   policy, timeout, and restart are covered without accidental merges.
 - Manual and automatic delivery share the same audited state transitions.
 
-### M12 — Spawned sessions and agent control API
+### M12 — Spawned trajectories and agent control API
 
 Build:
 
 - Add a narrow HTTP API and `garage-ctl` command that let an active sandbox create
-  a child session and inspect the sessions it spawned.
-- Issue short-lived, session-scoped bearer credentials to the runner and enforce
+  a child trajectory and inspect the trajectories it spawned.
+- Issue short-lived, trajectory-scoped bearer credentials to the runner and enforce
   child-count, concurrency, and total-budget limits.
 - Give every child an independent durable record, queue slot, workspace, event
   ledger, metrics, and delivery state.
@@ -457,11 +457,11 @@ Build:
 
 Definition of done:
 
-- An authorized agent can create a child session, and its source-session link is
+- An authorized agent can create a child trajectory, and its source-trajectory link is
   correct after restart.
 - The child starts from the recorded base SHA in a fresh workspace and does not
   silently inherit parent filesystem changes.
-- Cross-session access, expired credentials, and configured limits are rejected
+- Cross-trajectory access, expired credentials, and configured limits are rejected
   and tested.
 - Parent cancellation does not corrupt completed children; active-child behavior
   follows an explicit, tested policy.
@@ -471,11 +471,11 @@ Definition of done:
 | README target                                             | Delivery milestones |
 | --------------------------------------------------------- | ------------------- |
 | Create a pull request for a repository, prompt, and model | M4-M8               |
-| Track complete sessions and allow public sharing          | M4, M5, M7, M9      |
+| Track complete trajectories and allow public sharing      | M4, M5, M7, M9      |
 | Record preferred results and summarize model performance  | M10                 |
-| Run linked sessions side by side                          | M10                 |
+| Run linked trajectories side by side                      | M10                 |
 | Auto-merge when CI is green                               | M11                 |
-| Spawn durable child sessions from an active agent         | M12                 |
+| Spawn durable child trajectories from an active agent     | M12                 |
 
 ## Cross-cutting quality gates
 
@@ -503,7 +503,7 @@ them rather than prematurely expanding the product:
   the single-process implementation;
 - whether additional inference gateways or packaged coding agents are valuable
   after the OpenRouter agent contract is proven;
-- whether public comparisons are useful beyond sharing individual sessions;
+- whether public comparisons are useful beyond sharing individual trajectories;
 - how to import a parent's committed work as a child base without making
   uncommitted workspace state implicit;
 - whether model reports need task tags or richer statistical treatment after

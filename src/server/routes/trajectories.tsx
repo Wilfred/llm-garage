@@ -1,51 +1,51 @@
 import { Router } from "express";
 import { isModelId } from "../../models";
-import type { DataStore, Repo, Session } from "../../store/types";
+import type { DataStore, Repo, Trajectory } from "../../store/types";
 import {
-  NewSessionPage,
+  NewTrajectoryPage,
   NotFoundPage,
-  SessionDetailPage,
-  SessionsPage,
+  TrajectoryDetailPage,
+  TrajectoriesPage,
   type TurnTranscript,
-} from "../../views/pages/sessions";
+} from "../../views/pages/trajectories";
 import { renderPage } from "../../views/render";
 import { formField, queryString } from "./forms";
 
-export function createSessionsRouter(store: DataStore): Router {
+export function createTrajectoriesRouter(store: DataStore): Router {
   const router = Router();
 
-  router.get("/sessions", async (req, res) => {
-    const [repos, sessions] = await Promise.all([
+  router.get("/trajectories", async (req, res) => {
+    const [repos, trajectories] = await Promise.all([
       store.listRepos(),
-      store.listSessions(),
+      store.listTrajectories(),
     ]);
     const repoId = queryString(req.query["repoId"]);
-    const { selectedRepo, visibleSessions } = filterSessionsByRepo(
+    const { selectedRepo, visibleTrajectories } = filterTrajectoriesByRepo(
       repos,
-      sessions,
+      trajectories,
       repoId,
     );
     res
       .type("html")
       .send(
         renderPage(
-          <SessionsPage
+          <TrajectoriesPage
             repos={repos}
-            sessions={visibleSessions}
+            trajectories={visibleTrajectories}
             {...(selectedRepo === undefined ? {} : { selectedRepo })}
           />,
         ),
       );
   });
 
-  router.get("/sessions/new", async (req, res) => {
+  router.get("/trajectories/new", async (req, res) => {
     const repos = await store.listRepos();
     const selectedRepoId = queryString(req.query["repoId"]);
     res
       .type("html")
       .send(
         renderPage(
-          <NewSessionPage
+          <NewTrajectoryPage
             repos={repos}
             {...(selectedRepoId === undefined ? {} : { selectedRepoId })}
           />,
@@ -53,7 +53,7 @@ export function createSessionsRouter(store: DataStore): Router {
       );
   });
 
-  router.post("/sessions", async (req, res) => {
+  router.post("/trajectories", async (req, res) => {
     const repoId = formField(req.body, "repoId");
     const taskPrompt = formField(req.body, "taskPrompt");
     const modelId = formField(req.body, "modelId");
@@ -64,7 +64,7 @@ export function createSessionsRouter(store: DataStore): Router {
         .type("html")
         .send(
           renderPage(
-            <NewSessionPage
+            <NewTrajectoryPage
               repos={repos}
               selectedRepoId={repoId}
               error="Repository, model, and task are required."
@@ -73,7 +73,7 @@ export function createSessionsRouter(store: DataStore): Router {
         );
       return;
     }
-    const session = await store.createSession({
+    const trajectory = await store.createTrajectory({
       repoId,
       title: titleFromTask(taskPrompt),
       taskPrompt,
@@ -81,23 +81,25 @@ export function createSessionsRouter(store: DataStore): Router {
       createPr: true,
       autoMerge: false,
     });
-    res.redirect(303, `/sessions/${session.id}`);
+    res.redirect(303, `/trajectories/${trajectory.id}`);
   });
 
-  router.get("/sessions/:id", async (req, res) => {
-    const session = await store.getSession(req.params.id);
-    if (!session) {
+  router.get("/trajectories/:id", async (req, res) => {
+    const trajectory = await store.getTrajectory(req.params.id);
+    if (!trajectory) {
       res
         .status(404)
         .type("html")
         .send(
-          renderPage(<NotFoundPage message="That session does not exist." />),
+          renderPage(
+            <NotFoundPage message="That trajectory does not exist." />,
+          ),
         );
       return;
     }
     const [repo, turns] = await Promise.all([
-      store.getRepo(session.repoId),
-      store.listTurns(session.id),
+      store.getRepo(trajectory.repoId),
+      store.listTurns(trajectory.id),
     ]);
     const transcript: TurnTranscript[] = await Promise.all(
       turns.map(async (turn) => ({
@@ -109,8 +111,8 @@ export function createSessionsRouter(store: DataStore): Router {
       .type("html")
       .send(
         renderPage(
-          <SessionDetailPage
-            session={session}
+          <TrajectoryDetailPage
+            trajectory={trajectory}
             {...(repo === undefined ? {} : { repo })}
             transcript={transcript}
           />,
@@ -118,20 +120,20 @@ export function createSessionsRouter(store: DataStore): Router {
       );
   });
 
-  router.post("/sessions/:id/feedback", async (req, res) => {
+  router.post("/trajectories/:id/feedback", async (req, res) => {
     const feedback = formField(req.body, "feedback");
     if (feedback) await store.addFeedback(req.params.id, feedback);
-    res.redirect(303, `/sessions/${req.params.id}`);
+    res.redirect(303, `/trajectories/${req.params.id}`);
   });
 
-  router.post("/sessions/:id/cancel", async (req, res) => {
-    await store.cancelSession(req.params.id);
-    res.redirect(303, `/sessions/${req.params.id}`);
+  router.post("/trajectories/:id/cancel", async (req, res) => {
+    await store.cancelTrajectory(req.params.id);
+    res.redirect(303, `/trajectories/${req.params.id}`);
   });
 
-  router.post("/sessions/:id/archive", async (req, res) => {
-    await store.archiveSession(req.params.id);
-    res.redirect(303, `/sessions/${req.params.id}`);
+  router.post("/trajectories/:id/archive", async (req, res) => {
+    await store.archiveTrajectory(req.params.id);
+    res.redirect(303, `/trajectories/${req.params.id}`);
   });
 
   return router;
@@ -142,18 +144,20 @@ export function titleFromTask(taskPrompt: string): string {
   return firstLine.length > 80 ? `${firstLine.slice(0, 79)}…` : firstLine;
 }
 
-export function filterSessionsByRepo(
+export function filterTrajectoriesByRepo(
   repos: Repo[],
-  sessions: Session[],
+  trajectories: Trajectory[],
   repoId?: string,
-): { selectedRepo?: Repo; visibleSessions: Session[] } {
+): { selectedRepo?: Repo; visibleTrajectories: Trajectory[] } {
   const selectedRepo = repoId
     ? repos.find((candidate) => candidate.id === repoId)
     : undefined;
   return {
     ...(selectedRepo === undefined ? {} : { selectedRepo }),
-    visibleSessions: selectedRepo
-      ? sessions.filter((session) => session.repoId === selectedRepo.id)
-      : sessions,
+    visibleTrajectories: selectedRepo
+      ? trajectories.filter(
+          (trajectory) => trajectory.repoId === selectedRepo.id,
+        )
+      : trajectories,
   };
 }

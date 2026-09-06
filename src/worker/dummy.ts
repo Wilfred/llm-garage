@@ -1,11 +1,11 @@
 import { setTimeout as delay } from "node:timers/promises";
-import type { SessionWorker, WorkerContext, WorkerEvent } from "./types";
+import type { TrajectoryWorker, WorkerContext, WorkerEvent } from "./types";
 
 export type DummyWorkerOptions = {
   stepDelayMs?: number;
 };
 
-export class DummyWorker implements SessionWorker {
+export class DummyWorker implements TrajectoryWorker {
   private readonly stepDelayMs: number;
 
   constructor({ stepDelayMs = 750 }: DummyWorkerOptions = {}) {

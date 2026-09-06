@@ -3,12 +3,12 @@ import express, { type Express } from "express";
 import { h } from "preact";
 import type { DataSource } from "typeorm";
 import type { DataStore } from "../store/types";
-import { NotFoundPage } from "../views/pages/sessions";
+import { NotFoundPage } from "../views/pages/trajectories";
 import { renderPage } from "../views/render";
 import { createHealthRouter } from "./routes/health";
 import { createPagesRouter } from "./routes/pages";
 import { createReposRouter } from "./routes/repos";
-import { createSessionsRouter } from "./routes/sessions";
+import { createTrajectoriesRouter } from "./routes/trajectories";
 
 export function createApp(dataSource: DataSource, store: DataStore): Express {
   const app = express();
@@ -17,7 +17,7 @@ export function createApp(dataSource: DataSource, store: DataStore): Express {
   app.use(express.urlencoded({ extended: false }));
   app.use(createPagesRouter(store));
   app.use(createReposRouter(store));
-  app.use(createSessionsRouter(store));
+  app.use(createTrajectoriesRouter(store));
   app.use(createHealthRouter(dataSource));
   app.use((_req, res) => {
     res

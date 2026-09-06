@@ -11,13 +11,15 @@ export function createPagesRouter(store: DataStore): Router {
   const buildInfo = loadBuildInfo();
 
   router.get("/", async (_req, res) => {
-    const [repos, sessions] = await Promise.all([
+    const [repos, trajectories] = await Promise.all([
       store.listRepos(),
-      store.listSessions(),
+      store.listTrajectories(),
     ]);
     res
       .type("html")
-      .send(renderPage(<DashboardPage repos={repos} sessions={sessions} />));
+      .send(
+        renderPage(<DashboardPage repos={repos} trajectories={trajectories} />),
+      );
   });
 
   router.get("/about", (_req, res) => {

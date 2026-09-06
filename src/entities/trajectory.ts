@@ -8,7 +8,7 @@ import {
 } from "typeorm";
 import { RepoEntity } from "./repo";
 
-export const sessionStatuses = [
+export const trajectoryStatuses = [
   "queued",
   "running",
   "awaiting_feedback",
@@ -18,28 +18,28 @@ export const sessionStatuses = [
   "archived",
 ] as const;
 
-@Entity("sessions")
+@Entity("trajectories")
 @Index(["updatedAt"])
 @Index(["repoId", "updatedAt"])
 @Index(["parentId"])
 @Index(["rootId"])
-export class SessionEntity {
+export class TrajectoryEntity {
   @PrimaryColumn("text")
   id!: string;
 
   @Column("text", { nullable: true })
   parentId!: string | null;
 
-  @ManyToOne(() => SessionEntity, { nullable: true, onDelete: "RESTRICT" })
+  @ManyToOne(() => TrajectoryEntity, { nullable: true, onDelete: "RESTRICT" })
   @JoinColumn({ name: "parentId" })
-  parent?: SessionEntity | null;
+  parent?: TrajectoryEntity | null;
 
   @Column("text")
   rootId!: string;
 
-  @ManyToOne(() => SessionEntity, { onDelete: "RESTRICT" })
+  @ManyToOne(() => TrajectoryEntity, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "rootId" })
-  root?: SessionEntity;
+  root?: TrajectoryEntity;
 
   @Column("text")
   repoId!: string;
@@ -51,8 +51,8 @@ export class SessionEntity {
   @Column("text")
   title!: string;
 
-  @Column("simple-enum", { enum: sessionStatuses })
-  status!: (typeof sessionStatuses)[number];
+  @Column("simple-enum", { enum: trajectoryStatuses })
+  status!: (typeof trajectoryStatuses)[number];
 
   @Column("text")
   modelId!: string;

@@ -1,9 +1,9 @@
-import type { Repo, RunEvent, Session, Turn } from "../../store/types";
+import type { Repo, RunEvent, Trajectory, Turn } from "../../store/types";
 import { getModel, modelCatalog } from "../../models";
-import { formatDate, SessionCards, StatusBadge } from "../components";
+import { formatDate, TrajectoryCards, StatusBadge } from "../components";
 import { Layout } from "../layout";
 
-export function NewSessionPage({
+export function NewTrajectoryPage({
   repos,
   selectedRepoId,
   error,
@@ -13,10 +13,10 @@ export function NewSessionPage({
   error?: string;
 }) {
   return (
-    <Layout title="New session" section="sessions">
+    <Layout title="New trajectory" section="trajectories">
       <div class="page-header">
         <div>
-          <h1>New session</h1>
+          <h1>New trajectory</h1>
           <p>
             Runs a scripted local worker. No model calls or repository changes
             are made yet.
@@ -26,11 +26,11 @@ export function NewSessionPage({
       {error && <div class="notice">{error}</div>}
       {repos.length === 0 ? (
         <div class="empty">
-          Add a repository before starting a session.{" "}
+          Add a repository before starting a trajectory.{" "}
           <a href="/repos">Go to repositories</a>.
         </div>
       ) : (
-        <form class="card stack form-card" method="post" action="/sessions">
+        <form class="card stack form-card" method="post" action="/trajectories">
           <div class="field-row">
             <select name="repoId" required aria-label="Repository">
               {repos.map((repo) => (
@@ -54,7 +54,7 @@ export function NewSessionPage({
             placeholder="Describe the outcome you want…"
           />
           <button class="button button-primary" type="submit">
-            Start dummy session
+            Start dummy trajectory
           </button>
         </form>
       )}
@@ -64,50 +64,57 @@ export function NewSessionPage({
 
 export type TurnTranscript = { turn: Turn; events: RunEvent[] };
 
-export function SessionDetailPage({
-  session,
+export function TrajectoryDetailPage({
+  trajectory,
   repo,
   transcript,
 }: {
-  session: Session;
+  trajectory: Trajectory;
   repo?: Repo;
   transcript: TurnTranscript[];
 }) {
-  const model = getModel(session.modelId);
+  const model = getModel(trajectory.modelId);
   const canFeedback =
-    session.status !== "running" &&
-    session.status !== "queued" &&
-    session.status !== "archived";
-  const canCancel = session.status === "running" || session.status === "queued";
+    trajectory.status !== "running" &&
+    trajectory.status !== "queued" &&
+    trajectory.status !== "archived";
+  const canCancel =
+    trajectory.status === "running" || trajectory.status === "queued";
   return (
     <Layout
-      title={session.title}
-      section="sessions"
+      title={trajectory.title}
+      section="trajectories"
       {...(canCancel ? { refreshSeconds: 1 } : {})}
     >
       <div class="breadcrumb">
-        <a href="/sessions">Sessions</a>
+        <a href="/trajectories">Trajectories</a>
         <span>/</span>
-        <strong>{session.title}</strong>
+        <strong>{trajectory.title}</strong>
       </div>
       <div class="page-header">
         <div>
-          <StatusBadge status={session.status} />
+          <StatusBadge status={trajectory.status} />
           <p>
             {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"} ·{" "}
-            {model.name} via OpenRouter · {formatDate(session.createdAt)}
+            {model.name} via OpenRouter · {formatDate(trajectory.createdAt)}
           </p>
         </div>
         <div class="actions">
           {canCancel && (
-            <form method="post" action={`/sessions/${session.id}/cancel`}>
+            <form
+              method="post"
+              action={`/trajectories/${trajectory.id}/cancel`}
+            >
               <button class="button button-danger" type="submit">
                 Cancel run
               </button>
             </form>
           )}
-          {session.status !== "archived" && (
-            <form method="post" action={`/sessions/${session.id}/archive`}>
+          {trajectory.status !== "archived" && (
+            <form
+              method="post"
+              action={`/trajectories/${trajectory.id}/archive`}
+            >
               <button class="button" type="submit">
                 Archive
               </button>
@@ -115,7 +122,7 @@ export function SessionDetailPage({
           )}
         </div>
       </div>
-      <div class={session.prUrl ? "split" : undefined}>
+      <div class={trajectory.prUrl ? "split" : undefined}>
         <section class="transcript">
           <div class="section-heading">
             <h2>Transcript</h2>
@@ -146,10 +153,10 @@ export function SessionDetailPage({
               <form
                 class="stack"
                 method="post"
-                action={`/sessions/${session.id}/feedback`}
+                action={`/trajectories/${trajectory.id}/feedback`}
               >
                 <label>
-                  Continue this session
+                  Continue this trajectory
                   <textarea
                     name="feedback"
                     required
@@ -163,12 +170,12 @@ export function SessionDetailPage({
             </section>
           )}
         </section>
-        {session.prUrl && (
+        {trajectory.prUrl && (
           <aside class="stack sticky">
             <section class="card">
               <h2>Pull request</h2>
-              <a href={session.prUrl}>Open pull request</a>
-              {session.autoMerge && (
+              <a href={trajectory.prUrl}>Open pull request</a>
+              {trajectory.autoMerge && (
                 <p class="muted small">Auto-merge is enabled.</p>
               )}
             </section>
@@ -179,32 +186,32 @@ export function SessionDetailPage({
   );
 }
 
-export function SessionsPage({
+export function TrajectoriesPage({
   repos,
-  sessions,
+  trajectories,
   selectedRepo,
 }: {
   repos: Repo[];
-  sessions: Session[];
+  trajectories: Trajectory[];
   selectedRepo?: Repo;
 }) {
   return (
-    <Layout title="Sessions" section="sessions">
+    <Layout title="Trajectories" section="trajectories">
       <div class="page-header">
         <div>
-          <h1>Sessions</h1>
+          <h1>Trajectories</h1>
           {selectedRepo && (
             <p>
-              Showing sessions for{" "}
+              Showing trajectories for{" "}
               <a href={`/repos/${selectedRepo.id}`}>
                 {selectedRepo.owner}/{selectedRepo.name}
               </a>
-              . <a href="/sessions">Clear filter</a>
+              . <a href="/trajectories">Clear filter</a>
             </p>
           )}
         </div>
       </div>
-      <SessionCards sessions={sessions} repos={repos} />
+      <TrajectoryCards trajectories={trajectories} repos={repos} />
     </Layout>
   );
 }

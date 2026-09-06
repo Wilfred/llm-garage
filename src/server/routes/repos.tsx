@@ -6,7 +6,7 @@ import {
   RepoDetailPage,
   ReposPage,
 } from "../../views/pages/repos";
-import { NotFoundPage } from "../../views/pages/sessions";
+import { NotFoundPage } from "../../views/pages/trajectories";
 import { renderPage } from "../../views/render";
 import { formField, noticeUrl, queryString } from "./forms";
 
@@ -14,9 +14,9 @@ export function createReposRouter(store: DataStore): Router {
   const router = Router();
 
   router.get("/repos", async (req, res) => {
-    const [repos, sessions] = await Promise.all([
+    const [repos, trajectories] = await Promise.all([
       store.listRepos(),
-      store.listSessions(),
+      store.listTrajectories(),
     ]);
     const notice = queryString(req.query["notice"]);
     res
@@ -25,7 +25,7 @@ export function createReposRouter(store: DataStore): Router {
         renderPage(
           <ReposPage
             repos={repos}
-            sessions={sessions}
+            trajectories={trajectories}
             {...(notice === undefined ? {} : { notice })}
           />,
         ),
@@ -65,9 +65,9 @@ export function createReposRouter(store: DataStore): Router {
   });
 
   router.get("/repos/:id", async (req, res) => {
-    const [repo, allSessions] = await Promise.all([
+    const [repo, allTrajectories] = await Promise.all([
       store.getRepo(req.params.id),
-      store.listSessions(),
+      store.listTrajectories(),
     ]);
     if (!repo) {
       res
@@ -80,12 +80,14 @@ export function createReposRouter(store: DataStore): Router {
         );
       return;
     }
-    const sessions = allSessions.filter(
-      (session) => session.repoId === repo.id,
+    const trajectories = allTrajectories.filter(
+      (trajectory) => trajectory.repoId === repo.id,
     );
     res
       .type("html")
-      .send(renderPage(<RepoDetailPage repo={repo} sessions={sessions} />));
+      .send(
+        renderPage(<RepoDetailPage repo={repo} trajectories={trajectories} />),
+      );
   });
 
   router.post("/repos/:id/delete", async (req, res) => {
@@ -94,7 +96,7 @@ export function createReposRouter(store: DataStore): Router {
       result === "deleted"
         ? "Deleted repository."
         : result === "in_use"
-          ? "That repository is used by a session and cannot be deleted yet."
+          ? "That repository is used by a trajectory and cannot be deleted yet."
           : "Repository not found.";
     res.redirect(303, noticeUrl("/repos", notice));
   });
