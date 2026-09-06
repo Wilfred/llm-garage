@@ -129,20 +129,17 @@ void test("labels a repository-filtered sessions page", async () => {
 
 void test("new-session form has no prompt-library controls", async () => {
   const store = new MemoryDataStore();
-  const html = renderPage(
-    <NewSessionPage
-      repos={await store.listRepos()}
-      sessions={await store.listSessions()}
-    />,
-  );
+  const html = renderPage(<NewSessionPage repos={await store.listRepos()} />);
 
   assert.doesNotMatch(html, /system prompt/i);
   assert.doesNotMatch(html, /composed prompt/i);
   assert.doesNotMatch(html, /systemPromptExtra/);
   assert.doesNotMatch(html, />Runner</);
   assert.doesNotMatch(html, /Codex/);
-  assert.match(html, />Model</);
-  assert.match(html, /Run through OpenRouter/);
+  assert.doesNotMatch(html, /<label/);
+  assert.doesNotMatch(html, /name="(?:title|parentId|createPr|autoMerge)"/);
+  assert.doesNotMatch(html, /After the run/);
+  assert.match(html, /placeholder="Describe the outcome you want…"/);
   assert.match(html, /value="openai\/gpt-5\.6-sol"/);
   assert.match(html, /value="anthropic\/claude-opus-5"/);
   assert.match(html, /value="moonshotai\/kimi-k3"/);
