@@ -8,15 +8,7 @@ import {
 } from "typeorm";
 import { TrajectoryEntity } from "./trajectory";
 import { TurnEntity } from "./turn";
-
-export const runEventKinds = [
-  "log",
-  "status",
-  "system",
-  "model_output",
-  "tool",
-  "usage",
-] as const;
+import { runEventKinds, type RunEventKind } from "../store/types";
 
 @Entity("run_events")
 @Index(["trajectoryId", "sequence"], { unique: true })
@@ -43,7 +35,7 @@ export class RunEventEntity {
   sequence!: number;
 
   @Column("simple-enum", { enum: runEventKinds })
-  kind!: (typeof runEventKinds)[number];
+  kind!: RunEventKind;
 
   @Column("text")
   data!: string;

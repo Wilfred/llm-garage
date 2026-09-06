@@ -7,16 +7,7 @@ import {
   PrimaryColumn,
 } from "typeorm";
 import { RepoEntity } from "./repo";
-
-export const trajectoryStatuses = [
-  "queued",
-  "running",
-  "awaiting_feedback",
-  "succeeded",
-  "failed",
-  "cancelled",
-  "archived",
-] as const;
+import { trajectoryStatuses, type TrajectoryStatus } from "../store/types";
 
 @Entity("trajectories")
 @Index(["updatedAt"])
@@ -52,7 +43,7 @@ export class TrajectoryEntity {
   title!: string;
 
   @Column("simple-enum", { enum: trajectoryStatuses })
-  status!: (typeof trajectoryStatuses)[number];
+  status!: TrajectoryStatus;
 
   @Column("text")
   modelId!: string;

@@ -13,7 +13,7 @@ import type {
   WorkerEvent,
 } from "../worker/types";
 import { RepoAlreadyExistsError } from "./errors";
-import { MemoryDataStore, type MemoryStoreOptions } from "./memory";
+import { createStarterRepos } from "./seed";
 import type {
   CreateRepoInput,
   CreateTrajectoryInput,
@@ -24,6 +24,13 @@ import type {
   Trajectory,
   Turn,
 } from "./types";
+
+export type DatabaseStoreOptions = {
+  seed?: boolean;
+  simulationStepMs?: number;
+  worker?: TrajectoryWorker;
+  sandbox?: Sandbox;
+};
 
 export class DatabaseDataStore implements DataStore {
   private readonly repoRepository: Repository<RepoEntity>;
@@ -43,7 +50,7 @@ export class DatabaseDataStore implements DataStore {
       simulationStepMs = 500,
       worker = new DummyWorker({ stepDelayMs: simulationStepMs }),
       sandbox = new DisabledSandbox(),
-    }: MemoryStoreOptions = {},
+    }: DatabaseStoreOptions = {},
   ) {
     this.repoRepository = dataSource.getRepository(RepoEntity);
     this.trajectoryRepository = dataSource.getRepository(TrajectoryEntity);
@@ -56,8 +63,7 @@ export class DatabaseDataStore implements DataStore {
 
   async initialize(): Promise<void> {
     if (this.seed && (await this.repoRepository.count()) === 0) {
-      const prototypeStore = new MemoryDataStore();
-      await this.repoRepository.save(await prototypeStore.listRepos());
+      await this.repoRepository.save(createStarterRepos());
     }
   }
 
