@@ -63,10 +63,114 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
       ?.function.name,
     "run_command",
   );
+  assert.deepEqual(
+    (body as { tools: Array<{ function: { name: string } }> }).tools.map(
+      (tool) => tool.function.name,
+    ),
+    ["run_command", "fetch_url", "search_web"],
+  );
   assert.deepEqual(events, [
     { kind: "model_output", data: "A useful answer" },
     { kind: "usage", data: "1,250 input tokens · 42 output tokens" },
   ]);
+});
+
+void test("fetches URLs and searches Brave when requested by the model", async () => {
+  const responses = [
+    {
+      choices: [
+        {
+          message: {
+            content: null,
+            tool_calls: [
+              {
+                id: "fetch-1",
+                type: "function",
+                function: {
+                  name: "fetch_url",
+                  arguments: JSON.stringify({ url: "https://example.com" }),
+                },
+              },
+              {
+                id: "search-1",
+                type: "function",
+                function: {
+                  name: "search_web",
+                  arguments: JSON.stringify({ query: "example", count: 2 }),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    { choices: [{ message: { content: "Research complete." } }] },
+  ];
+  const calls: string[] = [];
+  const requests: unknown[] = [];
+  const events: WorkerEvent[] = [];
+  const worker = new OpenRouterWorker({
+    apiKey: "test-key",
+    fetch: async (_input, init) => {
+      requests.push(JSON.parse(init?.body as string));
+      return Response.json(responses.shift());
+    },
+    webTools: {
+      fetchUrl: async (url) => {
+        calls.push(`fetch ${url}`);
+        return {
+          url,
+          status: 200,
+          contentType: "text/plain",
+          content: "Example page",
+          truncated: false,
+        };
+      },
+      searchWeb: async (query, count) => {
+        calls.push(`search ${query} ${count.toString()}`);
+        return {
+          query,
+          results: [
+            {
+              title: "Example",
+              url: "https://example.com",
+              description: "A result",
+            },
+          ],
+        };
+      },
+    },
+  });
+
+  await worker.run({
+    modelId: "openai/gpt-5.6-sol",
+    modelName: "GPT-5.6 Sol",
+    messages: [{ role: "user", content: "Research example.com" }],
+    signal: new AbortController().signal,
+    emit: (event) => events.push(event),
+  });
+
+  assert.deepEqual(calls, ["fetch https://example.com", "search example 2"]);
+  assert.equal(requests.length, 2);
+  const followUp = requests[1] as {
+    messages: Array<{ role: string; tool_call_id?: string; content: string }>;
+  };
+  assert.deepEqual(
+    followUp.messages.slice(-2).map(({ role, tool_call_id }) => ({
+      role,
+      tool_call_id,
+    })),
+    [
+      { role: "tool", tool_call_id: "fetch-1" },
+      { role: "tool", tool_call_id: "search-1" },
+    ],
+  );
+  assert.deepEqual(
+    events.map(({ kind }) => kind),
+    ["tool", "tool", "tool", "tool", "model_output"],
+  );
+  assert.match(events[1]?.data ?? "", /Example page/);
+  assert.match(events[3]?.data ?? "", /A result/);
 });
 
 void test("runs model-requested shell commands and returns their output", async () => {

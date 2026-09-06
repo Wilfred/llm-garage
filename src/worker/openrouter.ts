@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { TrajectoryWorker, WorkerContext } from "./types";
+import type { WebToolProvider } from "./web-tools";
 
 const defaultEndpoint = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -41,6 +42,20 @@ const commandArgumentsSchema = z.object({
   command: z.string().min(1).max(4096),
 });
 
+const fetchUrlArgumentsSchema = z.object({
+  url: z.url().max(2048),
+});
+
+const searchWebArgumentsSchema = z.object({
+  query: z
+    .string()
+    .trim()
+    .min(1)
+    .max(400)
+    .refine((query) => query.split(/\s+/u).length <= 50),
+  count: z.number().int().min(1).max(10).optional().default(5),
+});
+
 const tools = [
   {
     type: "function",
@@ -57,6 +72,49 @@ const tools = [
           },
         },
         required: ["command"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "fetch_url",
+      description:
+        "Fetch bounded textual content from a public HTTP or HTTPS URL.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "The public HTTP or HTTPS URL to fetch.",
+          },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_web",
+      description: "Search the public web using Brave Search.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "The search query.",
+          },
+          count: {
+            type: "integer",
+            minimum: 1,
+            maximum: 10,
+            description: "Number of results to return. Defaults to 5.",
+          },
+        },
+        required: ["query"],
         additionalProperties: false,
       },
     },
@@ -81,6 +139,7 @@ export type OpenRouterWorkerOptions = {
   endpoint?: string;
   fetch?: typeof fetch;
   maxSteps?: number;
+  webTools?: WebToolProvider;
 };
 
 export class OpenRouterWorker implements TrajectoryWorker {
@@ -88,17 +147,20 @@ export class OpenRouterWorker implements TrajectoryWorker {
   private readonly endpoint: string;
   private readonly fetch: typeof fetch;
   private readonly maxSteps: number;
+  private readonly webTools: WebToolProvider | undefined;
 
   constructor({
     apiKey,
     endpoint = defaultEndpoint,
     fetch: fetchImplementation = fetch,
     maxSteps = 12,
+    webTools,
   }: OpenRouterWorkerOptions) {
     this.apiKey = apiKey;
     this.endpoint = endpoint;
     this.fetch = fetchImplementation;
     this.maxSteps = maxSteps;
+    this.webTools = webTools;
   }
 
   async run(context: WorkerContext): Promise<void> {
@@ -190,37 +252,80 @@ export class OpenRouterWorker implements TrajectoryWorker {
     },
     context: WorkerContext,
   ): Promise<string> {
-    if (toolCall.function.name !== "run_command") {
-      return JSON.stringify({ error: "Unknown tool" });
-    }
-
     let rawArguments: unknown;
     try {
       rawArguments = JSON.parse(toolCall.function.arguments);
     } catch {
       return JSON.stringify({ error: "Tool arguments are not valid JSON" });
     }
-    const argumentsResult = commandArgumentsSchema.safeParse(rawArguments);
-    if (!argumentsResult.success) {
-      return JSON.stringify({ error: "Invalid run_command arguments" });
+    switch (toolCall.function.name) {
+      case "run_command": {
+        const parsed = commandArgumentsSchema.safeParse(rawArguments);
+        if (!parsed.success) {
+          return JSON.stringify({ error: "Invalid run_command arguments" });
+        }
+        const runCommand = context.runCommand;
+        if (!runCommand) {
+          return JSON.stringify({ error: "Docker sandbox is not configured" });
+        }
+        return this.executeTool("run_command", parsed.data, context, () =>
+          runCommand(parsed.data.command),
+        );
+      }
+      case "fetch_url": {
+        const parsed = fetchUrlArgumentsSchema.safeParse(rawArguments);
+        if (!parsed.success) {
+          return JSON.stringify({ error: "Invalid fetch_url arguments" });
+        }
+        const webTools = this.webTools;
+        if (!webTools) {
+          return JSON.stringify({ error: "Web tools are not configured" });
+        }
+        return this.executeTool("fetch_url", parsed.data, context, () =>
+          webTools.fetchUrl(parsed.data.url, context.signal),
+        );
+      }
+      case "search_web": {
+        const parsed = searchWebArgumentsSchema.safeParse(rawArguments);
+        if (!parsed.success) {
+          return JSON.stringify({ error: "Invalid search_web arguments" });
+        }
+        const webTools = this.webTools;
+        if (!webTools) {
+          return JSON.stringify({ error: "Web tools are not configured" });
+        }
+        return this.executeTool("search_web", parsed.data, context, () =>
+          webTools.searchWeb(
+            parsed.data.query,
+            parsed.data.count,
+            context.signal,
+          ),
+        );
+      }
+      default:
+        return JSON.stringify({ error: "Unknown tool" });
     }
-    if (!context.runCommand) {
-      return JSON.stringify({ error: "Docker sandbox is not configured" });
-    }
+  }
 
+  private async executeTool(
+    name: string,
+    arguments_: object,
+    context: WorkerContext,
+    action: () => Promise<unknown>,
+  ): Promise<string> {
     context.emit({
       kind: "tool",
-      data: `run_command ${JSON.stringify(argumentsResult.data)}`,
+      data: `${name} ${JSON.stringify(arguments_)}`,
     });
     try {
-      const result = await context.runCommand(argumentsResult.data.command);
+      const result = await action();
       const serialized = JSON.stringify(result);
-      context.emit({ kind: "tool", data: `run_command result ${serialized}` });
+      context.emit({ kind: "tool", data: `${name} result ${serialized}` });
       return serialized;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const serialized = JSON.stringify({ error: message });
-      context.emit({ kind: "tool", data: `run_command result ${serialized}` });
+      context.emit({ kind: "tool", data: `${name} result ${serialized}` });
       return serialized;
     }
   }

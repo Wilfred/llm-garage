@@ -32,16 +32,17 @@ trajectory for related work that cannot be handled by a short-lived
 subagent. The parent link records provenance; this is not intended to
 be a general user-curated trajectory tree.
 
-**Status: clickable prototype.** The dashboard, repository workflow,
-OpenRouter-backed multi-turn trajectory flow, and isolated Docker command execution
-are available now. Repository checkout and GitHub integration arrive in later
-milestones. See [PLAN.md](PLAN.md) for the full design and milestone roadmap.
+**Status: clickable prototype.** The dashboard, repository workflow, and
+OpenRouter-backed multi-turn trajectory flow with isolated Docker commands and
+host-side web tools are available now. Repository checkout and GitHub integration
+arrive in later milestones. See [PLAN.md](PLAN.md) for the full design and milestone
+roadmap.
 
 ## Development
 
 ```sh
 npm install
-cp .env.example .env   # add your OpenRouter API key
+cp .env.example .env   # add your OpenRouter and Brave Search API keys
 npm run dev            # tsx watch, http://127.0.0.1:3000
 ```
 
@@ -58,6 +59,12 @@ gets a container named `llm-garage-trajectory-<id>`, using `alpine:3.22.5` by
 default. Set `WORKER_IMAGE` to use another compatible image. Worker containers
 have no network access, run as an unprivileged user, and are removed when their
 trajectory is archived.
+
+Workers can fetch public HTTP(S) text and search the web. Web search uses the
+Brave Search API and requires `BRAVE_SEARCH_API_KEY`. The key stays in the LLM
+Garage process and is not passed to worker containers or recorded in trajectory
+events. URL fetching blocks private and local network targets and limits response
+size, redirects, and duration.
 
 ## Docker
 
