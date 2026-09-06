@@ -8,8 +8,9 @@ void test("emits a short model and tool conversation before completing", async (
   const worker = new DummyWorker({ stepDelayMs: 1 });
 
   await worker.run({
+    modelId: "openai/gpt-5.6-sol",
     modelName: "Test Model",
-    taskPrompt: "Improve the example",
+    messages: [{ role: "user", content: "Improve the example" }],
     signal: new AbortController().signal,
     emit: (event) => events.push(event),
   });
@@ -41,8 +42,9 @@ void test("stops without emitting more events when cancelled", async () => {
   const events: WorkerEvent[] = [];
   const worker = new DummyWorker({ stepDelayMs: 50 });
   const running = worker.run({
+    modelId: "openai/gpt-5.6-sol",
     modelName: "Test Model",
-    taskPrompt: "Wait",
+    messages: [{ role: "user", content: "Wait" }],
     signal: controller.signal,
     emit: (event) => events.push(event),
   });

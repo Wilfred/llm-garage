@@ -156,6 +156,9 @@ void test("new-trajectory form has no prompt-library controls", async () => {
   assert.doesNotMatch(html, /name="(?:title|parentId|createPr|autoMerge)"/);
   assert.doesNotMatch(html, /After the run/);
   assert.match(html, /placeholder="Describe the outcome you want…"/);
+  assert.match(html, /Talk to a model through OpenRouter\./);
+  assert.match(html, />Start trajectory<\/button>/);
+  assert.doesNotMatch(html, /scripted local worker|dummy trajectory/);
   assert.match(html, /value="openai\/gpt-5\.6-sol"/);
   assert.match(html, /value="anthropic\/claude-opus-5"/);
   assert.match(html, /value="moonshotai\/kimi-k3"/);

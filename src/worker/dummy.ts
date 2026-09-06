@@ -19,7 +19,8 @@ export class DummyWorker implements TrajectoryWorker {
     }
   }
 
-  private script({ modelName, taskPrompt }: WorkerContext): WorkerEvent[] {
+  private script({ modelName, messages }: WorkerContext): WorkerEvent[] {
+    const taskPrompt = latestUserMessage(messages);
     return [
       {
         kind: "model_output",
@@ -59,4 +60,12 @@ export class DummyWorker implements TrajectoryWorker {
       },
     ];
   }
+}
+
+function latestUserMessage(messages: WorkerContext["messages"]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === "user") return message.content;
+  }
+  return "the requested task";
 }

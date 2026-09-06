@@ -6,7 +6,11 @@ import { TrajectoryEntity } from "../entities/trajectory";
 import { TurnEntity } from "../entities/turn";
 import { getModel, isModelId } from "../models";
 import { DummyWorker } from "../worker/dummy";
-import type { TrajectoryWorker, WorkerEvent } from "../worker/types";
+import type {
+  ConversationMessage,
+  TrajectoryWorker,
+  WorkerEvent,
+} from "../worker/types";
 import { RepoAlreadyExistsError } from "./errors";
 import { MemoryDataStore, type MemoryStoreOptions } from "./memory";
 import type {
@@ -158,7 +162,7 @@ export class DatabaseDataStore implements DataStore {
         trajectory.id,
         turn.id,
         "status",
-        `${getModel(input.modelId).name} dummy worker started`,
+        `${getModel(input.modelId).name} started`,
         now,
       );
       return { trajectory: toTrajectory(trajectory), turnId: turn.id };
@@ -217,7 +221,7 @@ export class DatabaseDataStore implements DataStore {
         trajectory.id,
         created.id,
         "status",
-        `${getModel(toTrajectory(trajectory).modelId).name} dummy worker started`,
+        `${getModel(toTrajectory(trajectory).modelId).name} started`,
         now,
       );
       return toTurn(created);
@@ -315,11 +319,13 @@ export class DatabaseDataStore implements DataStore {
     try {
       const trajectory = await this.getTrajectory(trajectoryId);
       if (!trajectory) return;
+      const messages = await this.conversationMessages(trajectoryId);
       let workerError: unknown;
       try {
         await this.worker.run({
+          modelId: trajectory.modelId,
           modelName: getModel(trajectory.modelId).name,
-          taskPrompt: trajectory.taskPrompt,
+          messages,
           signal: controller.signal,
           emit: (event) => {
             writes = writes.then(() =>
@@ -355,6 +361,34 @@ export class DatabaseDataStore implements DataStore {
         this.activeWorkers.delete(trajectoryId);
       }
     }
+  }
+
+  private async conversationMessages(
+    trajectoryId: string,
+  ): Promise<ConversationMessage[]> {
+    const [turns, events] = await Promise.all([
+      this.turnRepository.find({
+        where: { trajectoryId },
+        order: { createdAt: "ASC" },
+      }),
+      this.eventRepository.find({
+        where: { trajectoryId },
+        order: { sequence: "ASC" },
+      }),
+    ]);
+
+    return turns.flatMap((turn) => {
+      const output = events
+        .filter(
+          (event) => event.turnId === turn.id && event.kind === "model_output",
+        )
+        .map((event) => event.data)
+        .join("\n");
+      return [
+        { role: "user" as const, content: turn.prompt },
+        ...(output ? [{ role: "assistant" as const, content: output }] : []),
+      ];
+    });
   }
 
   private async recordWorkerEvent(
