@@ -162,7 +162,7 @@ void test("new-trajectory form has no prompt-library controls", async () => {
   assert.match(html, /value="z-ai\/glm-5\.2"/);
 });
 
-void test("does not expose arbitrary trajectory-tree controls", async () => {
+void test("keeps trajectory detail focused", async () => {
   const store = new MemoryDataStore();
   const trajectory = await store.getTrajectory("trajectory-navigation");
   assert.ok(trajectory);
@@ -173,21 +173,25 @@ void test("does not expose arbitrary trajectory-tree controls", async () => {
       events: await store.listRunEvents(turn.id),
     })),
   );
-  const repo = await store.getRepo(trajectory.repoId);
   const html = renderPage(
-    <TrajectoryDetailPage
-      trajectory={trajectory}
-      {...(repo === undefined ? {} : { repo })}
-      transcript={transcript}
-    />,
+    <TrajectoryDetailPage trajectory={trajectory} transcript={transcript} />,
   );
 
   assert.doesNotMatch(html, /Trajectory tree/);
   assert.doesNotMatch(html, /trajectory-m3/);
   assert.doesNotMatch(html, /<h1>Tighten dashboard navigation<\/h1>/);
   assert.doesNotMatch(html, /started/);
+  assert.doesNotMatch(html, /via OpenRouter/);
+  assert.doesNotMatch(html, /Wilfred\/llm-garage/);
   assert.doesNotMatch(html, /Pull request/);
   assert.doesNotMatch(html, />succeeded</);
+  assert.doesNotMatch(html, /feedback/i);
+  assert.doesNotMatch(html, />Transcript</);
+  assert.doesNotMatch(html, />Turn \d/);
+  assert.doesNotMatch(html, /<label/);
+  assert.match(html, /aria-label="Additional prompt"/);
+  assert.match(html, /placeholder="Add another prompt…"/);
+  assert.match(html, />Send<\/button>/);
   assert.match(html, /status-idle">idle<\/span>/);
 });
 

@@ -288,6 +288,13 @@ code {
   flex-wrap: wrap;
   align-items: center;
 }
+.detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
 form.stack,
 .stack {
   display: grid;
@@ -469,12 +476,16 @@ a.stat-value {
   display: grid;
   gap: 1rem;
 }
-.turn-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.8rem;
+.continue-form {
+  display: grid;
+  gap: 0.65rem;
+}
+.continue-form textarea {
+  min-height: 80px;
+  margin-top: 0;
+}
+.continue-form .button {
+  justify-self: end;
 }
 .turn-prompt {
   border-left: 2px solid var(--blue);

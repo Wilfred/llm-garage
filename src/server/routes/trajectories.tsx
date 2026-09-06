@@ -95,10 +95,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         );
       return;
     }
-    const [repo, turns] = await Promise.all([
-      store.getRepo(trajectory.repoId),
-      store.listTurns(trajectory.id),
-    ]);
+    const turns = await store.listTurns(trajectory.id);
     const transcript: TurnTranscript[] = await Promise.all(
       turns.map(async (turn) => ({
         turn,
@@ -111,16 +108,15 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         renderPage(
           <TrajectoryDetailPage
             trajectory={trajectory}
-            {...(repo === undefined ? {} : { repo })}
             transcript={transcript}
           />,
         ),
       );
   });
 
-  router.post("/trajectories/:id/feedback", async (req, res) => {
-    const feedback = formField(req.body, "feedback");
-    if (feedback) await store.addFeedback(req.params.id, feedback);
+  router.post("/trajectories/:id/prompts", async (req, res) => {
+    const prompt = formField(req.body, "prompt");
+    if (prompt) await store.addFeedback(req.params.id, prompt);
     res.redirect(303, `/trajectories/${req.params.id}`);
   });
 
