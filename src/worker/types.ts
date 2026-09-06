@@ -10,6 +10,6 @@ export type WorkerContext = {
   emit: (event: WorkerEvent) => void;
 };
 
-export interface SessionWorker {
+export interface TrajectoryWorker {
   run(context: WorkerContext): Promise<void>;
 }

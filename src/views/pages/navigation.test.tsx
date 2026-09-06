@@ -4,30 +4,36 @@ import { MemoryDataStore } from "../../store/memory";
 import { renderPage } from "../render";
 import { DashboardPage } from "./dashboard";
 import { NewRepoPage, RepoDetailPage, ReposPage } from "./repos";
-import { NewSessionPage, SessionDetailPage, SessionsPage } from "./sessions";
+import {
+  NewTrajectoryPage,
+  TrajectoryDetailPage,
+  TrajectoriesPage,
+} from "./trajectories";
 
 void test("keeps the primary navigation focused", async () => {
   const store = new MemoryDataStore();
-  const [repos, sessions] = await Promise.all([
+  const [repos, trajectories] = await Promise.all([
     store.listRepos(),
-    store.listSessions(),
+    store.listTrajectories(),
   ]);
-  const html = renderPage(<DashboardPage repos={repos} sessions={sessions} />);
+  const html = renderPage(
+    <DashboardPage repos={repos} trajectories={trajectories} />,
+  );
 
   assert.match(html, /🛠️/u);
-  assert.match(html, /href="\/sessions"/);
+  assert.match(html, /href="\/trajectories"/);
   assert.doesNotMatch(html, /href="\/prompts"/);
   assert.doesNotMatch(
     html,
     /<nav[^>]*>(?:(?!<\/nav>).)*>(?:Dashboard|About)</s,
   );
   assert.doesNotMatch(html, /Workshop overview/);
-  assert.doesNotMatch(html, /Start a session/);
-  assert.equal(html.match(/href="\/sessions\/new"/g)?.length, 1);
+  assert.doesNotMatch(html, /Start a trajectory/);
+  assert.equal(html.match(/href="\/trajectories\/new"/g)?.length, 1);
 });
 
 void test("loads page styles from the shared stylesheet", () => {
-  const html = renderPage(<DashboardPage repos={[]} sessions={[]} />);
+  const html = renderPage(<DashboardPage repos={[]} trajectories={[]} />);
 
   assert.match(html, /<link rel="stylesheet" href="\/styles\.css"\/>/);
   assert.doesNotMatch(html, /<style>/);
@@ -35,25 +41,27 @@ void test("loads page styles from the shared stylesheet", () => {
 
 void test("renders the repository listing without branch or delete controls", async () => {
   const store = new MemoryDataStore();
-  const [repos, sessions] = await Promise.all([
+  const [repos, trajectories] = await Promise.all([
     store.listRepos(),
-    store.listSessions(),
+    store.listTrajectories(),
   ]);
-  const html = renderPage(<ReposPage repos={repos} sessions={sessions} />);
+  const html = renderPage(
+    <ReposPage repos={repos} trajectories={trajectories} />,
+  );
 
   assert.doesNotMatch(html, /Sources/);
   assert.doesNotMatch(html, />master</);
   assert.doesNotMatch(html, /\/delete"/);
   assert.match(html, /href="\/repos\/new"/);
   for (const repo of repos) {
-    const repoSessions = sessions.filter(
-      (session) => session.repoId === repo.id,
+    const repoTrajectories = trajectories.filter(
+      (trajectory) => trajectory.repoId === repo.id,
     );
     assert.match(html, new RegExp(`href="/repos/${repo.id}"`));
     assert.match(
       html,
       new RegExp(
-        `href="/sessions\\?repoId=${repo.id}">${repoSessions.length.toString()}</a>`,
+        `href="/trajectories\\?repoId=${repo.id}">${repoTrajectories.length.toString()}</a>`,
       ),
     );
   }
@@ -69,67 +77,75 @@ void test("renders repository creation on its own page", () => {
   assert.match(html, /<h1>Add repository<\/h1>/);
 });
 
-void test("renders repository details and session counts", async () => {
+void test("renders repository details and trajectory counts", async () => {
   const store = new MemoryDataStore();
   const repo = (await store.listRepos()).find(({ id }) => id === "repo-garage");
   assert.ok(repo);
-  const sessions = (await store.listSessions()).filter(
-    (session) => session.repoId === repo.id,
+  const trajectories = (await store.listTrajectories()).filter(
+    (trajectory) => trajectory.repoId === repo.id,
   );
-  const html = renderPage(<RepoDetailPage repo={repo} sessions={sessions} />);
+  const html = renderPage(
+    <RepoDetailPage repo={repo} trajectories={trajectories} />,
+  );
 
   assert.match(html, /Default branch/);
   assert.match(html, />main</);
   assert.match(
     html,
-    /<h2>Active sessions<\/h2><div class="stat-value">2<\/div>/,
+    /<h2>Active trajectories<\/h2><div class="stat-value">2<\/div>/,
   );
-  assert.match(html, /href="\/sessions\?repoId=repo-garage">4<\/a>/);
+  assert.match(html, /href="\/trajectories\?repoId=repo-garage">4<\/a>/);
 });
 
-void test("lists every session on the sessions page", async () => {
+void test("lists every trajectory on the trajectories page", async () => {
   const store = new MemoryDataStore();
-  const [repos, sessions] = await Promise.all([
+  const [repos, trajectories] = await Promise.all([
     store.listRepos(),
-    store.listSessions(),
+    store.listTrajectories(),
   ]);
-  const html = renderPage(<SessionsPage repos={repos} sessions={sessions} />);
+  const html = renderPage(
+    <TrajectoriesPage repos={repos} trajectories={trajectories} />,
+  );
 
-  for (const session of sessions) assert.match(html, new RegExp(session.title));
+  for (const trajectory of trajectories)
+    assert.match(html, new RegExp(trajectory.title));
 });
 
-void test("labels a repository-filtered sessions page", async () => {
+void test("labels a repository-filtered trajectories page", async () => {
   const store = new MemoryDataStore();
   const repos = await store.listRepos();
   const selectedRepo = repos[0];
   assert.ok(selectedRepo);
-  const sessions = (await store.listSessions()).filter(
-    (session) => session.repoId === selectedRepo.id,
+  const trajectories = (await store.listTrajectories()).filter(
+    (trajectory) => trajectory.repoId === selectedRepo.id,
   );
   const html = renderPage(
-    <SessionsPage
+    <TrajectoriesPage
       repos={repos}
-      sessions={sessions}
+      trajectories={trajectories}
       selectedRepo={selectedRepo}
     />,
   );
 
   assert.match(
     html,
-    new RegExp(`Showing sessions for.*${selectedRepo.name}`, "s"),
+    new RegExp(`Showing trajectories for.*${selectedRepo.name}`, "s"),
   );
-  assert.match(html, /href="\/sessions">Clear filter<\/a>/);
-  for (const session of sessions) assert.match(html, new RegExp(session.title));
-  for (const session of await store.listSessions()) {
-    if (session.repoId !== selectedRepo.id) {
-      assert.doesNotMatch(html, new RegExp(session.title));
+  assert.match(html, /href="\/trajectories">Clear filter<\/a>/);
+  for (const trajectory of trajectories)
+    assert.match(html, new RegExp(trajectory.title));
+  for (const trajectory of await store.listTrajectories()) {
+    if (trajectory.repoId !== selectedRepo.id) {
+      assert.doesNotMatch(html, new RegExp(trajectory.title));
     }
   }
 });
 
-void test("new-session form has no prompt-library controls", async () => {
+void test("new-trajectory form has no prompt-library controls", async () => {
   const store = new MemoryDataStore();
-  const html = renderPage(<NewSessionPage repos={await store.listRepos()} />);
+  const html = renderPage(
+    <NewTrajectoryPage repos={await store.listRepos()} />,
+  );
 
   assert.doesNotMatch(html, /system prompt/i);
   assert.doesNotMatch(html, /composed prompt/i);
@@ -146,28 +162,28 @@ void test("new-session form has no prompt-library controls", async () => {
   assert.match(html, /value="z-ai\/glm-5\.2"/);
 });
 
-void test("does not expose arbitrary session-tree controls", async () => {
+void test("does not expose arbitrary trajectory-tree controls", async () => {
   const store = new MemoryDataStore();
-  const session = await store.getSession("session-navigation");
-  assert.ok(session);
-  const turns = await store.listTurns(session.id);
+  const trajectory = await store.getTrajectory("trajectory-navigation");
+  assert.ok(trajectory);
+  const turns = await store.listTurns(trajectory.id);
   const transcript = await Promise.all(
     turns.map(async (turn) => ({
       turn,
       events: await store.listRunEvents(turn.id),
     })),
   );
-  const repo = await store.getRepo(session.repoId);
+  const repo = await store.getRepo(trajectory.repoId);
   const html = renderPage(
-    <SessionDetailPage
-      session={session}
+    <TrajectoryDetailPage
+      trajectory={trajectory}
       {...(repo === undefined ? {} : { repo })}
       transcript={transcript}
     />,
   );
 
-  assert.doesNotMatch(html, /Session tree/);
-  assert.doesNotMatch(html, /session-m3/);
+  assert.doesNotMatch(html, /Trajectory tree/);
+  assert.doesNotMatch(html, /trajectory-m3/);
   assert.doesNotMatch(html, /<h1>Tighten dashboard navigation<\/h1>/);
   assert.doesNotMatch(html, /started/);
   assert.doesNotMatch(html, /Pull request/);
@@ -175,12 +191,12 @@ void test("does not expose arbitrary session-tree controls", async () => {
   assert.match(html, /status-idle">idle<\/span>/);
 });
 
-void test("uses only the four user-facing session states", async () => {
+void test("uses only the four user-facing trajectory states", async () => {
   const store = new MemoryDataStore();
   const html = renderPage(
-    <SessionsPage
+    <TrajectoriesPage
       repos={await store.listRepos()}
-      sessions={await store.listSessions()}
+      trajectories={await store.listTrajectories()}
     />,
   );
 
@@ -194,11 +210,13 @@ void test("uses only the four user-facing session states", async () => {
   );
 });
 
-void test("identifies each session's model and OpenRouter gateway", async () => {
+void test("identifies each trajectory's model and OpenRouter gateway", async () => {
   const store = new MemoryDataStore();
   const repos = await store.listRepos();
-  const sessions = await store.listSessions();
-  const html = renderPage(<SessionsPage repos={repos} sessions={sessions} />);
+  const trajectories = await store.listTrajectories();
+  const html = renderPage(
+    <TrajectoriesPage repos={repos} trajectories={trajectories} />,
+  );
 
   assert.match(html, /GPT-5\.6 Sol via OpenRouter/);
   assert.match(html, /Claude Opus 5 via OpenRouter/);

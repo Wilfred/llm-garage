@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import type { Repo, Session, SessionStatus } from "../store/types";
+import type { Repo, Trajectory, TrajectoryStatus } from "../store/types";
 import { getModel } from "../models";
 
 export function formatDate(date: Date): string {
@@ -9,13 +9,13 @@ export function formatDate(date: Date): string {
   }).format(date);
 }
 
-export function StatusBadge({ status }: { status: SessionStatus }) {
-  const displayStatus = sessionDisplayStatus(status);
+export function StatusBadge({ status }: { status: TrajectoryStatus }) {
+  const displayStatus = trajectoryDisplayStatus(status);
   return <span class={`status status-${displayStatus}`}>{displayStatus}</span>;
 }
 
-export function sessionDisplayStatus(
-  status: SessionStatus,
+export function trajectoryDisplayStatus(
+  status: TrajectoryStatus,
 ): "active" | "archive" | "errored" | "idle" {
   if (status === "running") return "active";
   if (status === "failed") return "errored";
@@ -27,30 +27,33 @@ export function EmptyState({ children }: { children: ComponentChildren }) {
   return <div class="empty">{children}</div>;
 }
 
-export function SessionCards({
-  sessions,
+export function TrajectoryCards({
+  trajectories,
   repos,
 }: {
-  sessions: Session[];
+  trajectories: Trajectory[];
   repos: Repo[];
 }) {
-  if (sessions.length === 0) return <EmptyState>No sessions here.</EmptyState>;
+  if (trajectories.length === 0)
+    return <EmptyState>No trajectories here.</EmptyState>;
   return (
     <div class="grid grid-3">
-      {sessions.map((session) => {
-        const repo = repos.find((candidate) => candidate.id === session.repoId);
-        const model = getModel(session.modelId);
+      {trajectories.map((trajectory) => {
+        const repo = repos.find(
+          (candidate) => candidate.id === trajectory.repoId,
+        );
+        const model = getModel(trajectory.modelId);
         return (
-          <a class="card card-link" href={`/sessions/${session.id}`}>
-            <StatusBadge status={session.status} />
-            <div class="card-title">{session.title}</div>
+          <a class="card card-link" href={`/trajectories/${trajectory.id}`}>
+            <StatusBadge status={trajectory.status} />
+            <div class="card-title">{trajectory.title}</div>
             <div class="card-meta">
               <span>
                 {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"}
               </span>
               <span>{model.name} via OpenRouter</span>
-              <time dateTime={session.updatedAt.toISOString()}>
-                {formatDate(session.updatedAt)}
+              <time dateTime={trajectory.updatedAt.toISOString()}>
+                {formatDate(trajectory.updatedAt)}
               </time>
             </div>
           </a>

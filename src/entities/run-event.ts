@@ -6,7 +6,7 @@ import {
   ManyToOne,
   PrimaryColumn,
 } from "typeorm";
-import { SessionEntity } from "./session";
+import { TrajectoryEntity } from "./trajectory";
 import { TurnEntity } from "./turn";
 
 export const runEventKinds = [
@@ -19,18 +19,18 @@ export const runEventKinds = [
 ] as const;
 
 @Entity("run_events")
-@Index(["sessionId", "sequence"], { unique: true })
+@Index(["trajectoryId", "sequence"], { unique: true })
 @Index(["turnId", "sequence"])
 export class RunEventEntity {
   @PrimaryColumn("text")
   id!: string;
 
   @Column("text")
-  sessionId!: string;
+  trajectoryId!: string;
 
-  @ManyToOne(() => SessionEntity, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "sessionId" })
-  session?: SessionEntity;
+  @ManyToOne(() => TrajectoryEntity, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "trajectoryId" })
+  trajectory?: TrajectoryEntity;
 
   @Column("text")
   turnId!: string;

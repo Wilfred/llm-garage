@@ -6,7 +6,7 @@ import {
   ManyToOne,
   PrimaryColumn,
 } from "typeorm";
-import { SessionEntity } from "./session";
+import { TrajectoryEntity } from "./trajectory";
 
 export const turnKinds = ["initial", "feedback", "spawn"] as const;
 export const turnStatuses = [
@@ -18,17 +18,17 @@ export const turnStatuses = [
 ] as const;
 
 @Entity("turns")
-@Index(["sessionId", "createdAt"])
+@Index(["trajectoryId", "createdAt"])
 export class TurnEntity {
   @PrimaryColumn("text")
   id!: string;
 
   @Column("text")
-  sessionId!: string;
+  trajectoryId!: string;
 
-  @ManyToOne(() => SessionEntity, { onDelete: "CASCADE" })
-  @JoinColumn({ name: "sessionId" })
-  session?: SessionEntity;
+  @ManyToOne(() => TrajectoryEntity, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "trajectoryId" })
+  trajectory?: TrajectoryEntity;
 
   @Column("simple-enum", { enum: turnKinds })
   kind!: (typeof turnKinds)[number];

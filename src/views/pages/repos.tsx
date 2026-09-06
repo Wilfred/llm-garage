@@ -1,17 +1,17 @@
-import type { Repo, Session } from "../../store/types";
+import type { Repo, Trajectory } from "../../store/types";
 import { EmptyState, formatDate } from "../components";
 import { Layout } from "../layout";
 
-const isActive = ({ status }: Session): boolean =>
+const isActive = ({ status }: Trajectory): boolean =>
   status === "running" || status === "queued";
 
 export function ReposPage({
   repos,
-  sessions,
+  trajectories,
   notice,
 }: {
   repos: Repo[];
-  sessions: Session[];
+  trajectories: Trajectory[];
   notice?: string;
 }) {
   const success = notice?.startsWith("Added") || notice?.startsWith("Deleted");
@@ -39,14 +39,14 @@ export function ReposPage({
             <thead>
               <tr>
                 <th>Repository</th>
-                <th>Sessions</th>
+                <th>Trajectories</th>
                 <th>Active</th>
               </tr>
             </thead>
             <tbody>
               {repos.map((repo) => {
-                const repoSessions = sessions.filter(
-                  (session) => session.repoId === repo.id,
+                const repoTrajectories = trajectories.filter(
+                  (trajectory) => trajectory.repoId === repo.id,
                 );
                 return (
                   <tr>
@@ -57,12 +57,12 @@ export function ReposPage({
                     </td>
                     <td>
                       <a
-                        href={`/sessions?repoId=${encodeURIComponent(repo.id)}`}
+                        href={`/trajectories?repoId=${encodeURIComponent(repo.id)}`}
                       >
-                        {repoSessions.length}
+                        {repoTrajectories.length}
                       </a>
                     </td>
-                    <td>{repoSessions.filter(isActive).length}</td>
+                    <td>{repoTrajectories.filter(isActive).length}</td>
                   </tr>
                 );
               })}
@@ -126,13 +126,13 @@ export function NewRepoPage({ error }: { error?: string }) {
 
 export function RepoDetailPage({
   repo,
-  sessions,
+  trajectories,
 }: {
   repo: Repo;
-  sessions: Session[];
+  trajectories: Trajectory[];
 }) {
-  const activeCount = sessions.filter(isActive).length;
-  const sessionsUrl = `/sessions?repoId=${encodeURIComponent(repo.id)}`;
+  const activeCount = trajectories.filter(isActive).length;
+  const trajectoriesUrl = `/trajectories?repoId=${encodeURIComponent(repo.id)}`;
   return (
     <Layout title={`${repo.owner}/${repo.name}`} section="repos">
       <div class="breadcrumb">
@@ -151,9 +151,9 @@ export function RepoDetailPage({
         <div class="actions">
           <a
             class="button button-primary"
-            href={`/sessions/new?repoId=${encodeURIComponent(repo.id)}`}
+            href={`/trajectories/new?repoId=${encodeURIComponent(repo.id)}`}
           >
-            New session
+            New trajectory
           </a>
           <form method="post" action={`/repos/${repo.id}/delete`}>
             <button class="button button-danger" type="submit">
@@ -168,13 +168,13 @@ export function RepoDetailPage({
           <div class="stat-value">{repo.defaultBranch}</div>
         </section>
         <section class="card">
-          <h2>Sessions</h2>
-          <a class="stat-value" href={sessionsUrl}>
-            {sessions.length}
+          <h2>Trajectories</h2>
+          <a class="stat-value" href={trajectoriesUrl}>
+            {trajectories.length}
           </a>
         </section>
         <section class="card">
-          <h2>Active sessions</h2>
+          <h2>Active trajectories</h2>
           <div class="stat-value">{activeCount}</div>
         </section>
       </div>

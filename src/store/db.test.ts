@@ -8,7 +8,7 @@ import type { DataSource } from "typeorm";
 import { createAppDataSource } from "../db/data-source";
 import { RepoAlreadyExistsError } from "./errors";
 import { DatabaseDataStore } from "./db";
-import type { DataStore, SessionStatus } from "./types";
+import type { DataStore, TrajectoryStatus } from "./types";
 
 void test("persists repository CRUD across data source restarts", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-repos-"));
@@ -51,8 +51,10 @@ void test("persists repository CRUD across data source restarts", async (t) => {
   assert.equal((await store.listRepos()).length, 3);
 });
 
-void test("persists sessions, turns, and ordered events across restarts", async (t) => {
-  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-sessions-"));
+void test("persists trajectories, turns, and ordered events across restarts", async (t) => {
+  const dataDir = await mkdtemp(
+    path.join(os.tmpdir(), "llm-garage-trajectories-"),
+  );
   let dataSource = createAppDataSource(dataDir);
   t.after(async () => {
     if (dataSource.isInitialized) await dataSource.destroy();
@@ -67,7 +69,7 @@ void test("persists sessions, turns, and ordered events across restarts", async 
 
   const repo = await store.createRepo({
     owner: "example",
-    name: "session-project",
+    name: "trajectory-project",
     defaultBranch: "main",
   });
   await assert.rejects(
@@ -79,21 +81,21 @@ void test("persists sessions, turns, and ordered events across restarts", async 
     RepoAlreadyExistsError,
   );
 
-  const session = await store.createSession({
+  const trajectory = await store.createTrajectory({
     repoId: repo.id,
-    title: "Persist the session",
+    title: "Persist the trajectory",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Exercise the database store",
     createPr: false,
     autoMerge: false,
   });
-  const [runningTurn] = await store.listTurns(session.id);
+  const [runningTurn] = await store.listTurns(trajectory.id);
   assert.ok(runningTurn);
   assert.equal((await store.listRunEvents(runningTurn.id)).length, 1);
-  await waitForStatus(store, session.id, "succeeded");
+  await waitForStatus(store, trajectory.id, "succeeded");
 
-  const [initialTurn] = await store.listTurns(session.id);
-  assert.equal((await store.getSession(session.id))?.status, "succeeded");
+  const [initialTurn] = await store.listTurns(trajectory.id);
+  assert.equal((await store.getTrajectory(trajectory.id))?.status, "succeeded");
   assert.equal(initialTurn?.status, "succeeded");
   assert.ok(initialTurn);
   assert.deepEqual(
@@ -101,8 +103,11 @@ void test("persists sessions, turns, and ordered events across restarts", async 
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   );
 
-  const feedbackTurn = await store.addFeedback(session.id, "Tighten the copy");
-  await waitForStatus(store, session.id, "succeeded");
+  const feedbackTurn = await store.addFeedback(
+    trajectory.id,
+    "Tighten the copy",
+  );
+  await waitForStatus(store, trajectory.id, "succeeded");
   assert.deepEqual(
     (await store.listRunEvents(feedbackTurn.id)).map(
       ({ sequence }) => sequence,
@@ -117,10 +122,10 @@ void test("persists sessions, turns, and ordered events across restarts", async 
   await restartedStore.initialize();
 
   assert.equal(
-    (await restartedStore.getSession(session.id))?.status,
+    (await restartedStore.getTrajectory(trajectory.id))?.status,
     "succeeded",
   );
-  assert.equal((await restartedStore.listTurns(session.id)).length, 2);
+  assert.equal((await restartedStore.listTurns(trajectory.id)).length, 2);
   assert.deepEqual(
     (await restartedStore.listRunEvents(feedbackTurn.id)).map(
       ({ sequence }) => sequence,
@@ -132,7 +137,7 @@ void test("persists sessions, turns, and ordered events across restarts", async 
 
 void test("commits cancellation state and its event together", async (t) => {
   const dataDir = await mkdtemp(
-    path.join(os.tmpdir(), "llm-garage-session-cancel-"),
+    path.join(os.tmpdir(), "llm-garage-trajectory-cancel-"),
   );
   const dataSource = createAppDataSource(dataDir);
   t.after(async () => {
@@ -151,29 +156,29 @@ void test("commits cancellation state and its event together", async (t) => {
     name: "cancel-project",
     defaultBranch: "main",
   });
-  const session = await store.createSession({
+  const trajectory = await store.createTrajectory({
     repoId: repo.id,
-    title: "Cancel the session",
+    title: "Cancel the trajectory",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Wait for cancellation",
     createPr: false,
     autoMerge: false,
   });
 
-  assert.equal(await store.cancelSession(session.id), true);
-  const [turn] = await store.listTurns(session.id);
-  assert.equal((await store.getSession(session.id))?.status, "cancelled");
+  assert.equal(await store.cancelTrajectory(trajectory.id), true);
+  const [turn] = await store.listTurns(trajectory.id);
+  assert.equal((await store.getTrajectory(trajectory.id))?.status, "cancelled");
   assert.equal(turn?.status, "cancelled");
   assert.ok(turn);
   assert.deepEqual(
     (await store.listRunEvents(turn.id)).map(({ data }) => data),
-    ["GPT-5.6 Sol dummy worker started", "Session cancelled by user"],
+    ["GPT-5.6 Sol dummy worker started", "Trajectory cancelled by user"],
   );
 });
 
-void test("rejects invalid session relationships without partial records", async (t) => {
+void test("rejects invalid trajectory relationships without partial records", async (t) => {
   const dataDir = await mkdtemp(
-    path.join(os.tmpdir(), "llm-garage-session-relations-"),
+    path.join(os.tmpdir(), "llm-garage-trajectory-relations-"),
   );
   const dataSource = createAppDataSource(dataDir);
   t.after(async () => {
@@ -188,7 +193,7 @@ void test("rejects invalid session relationships without partial records", async
   await store.initialize();
 
   await assert.rejects(
-    store.createSession({
+    store.createTrajectory({
       repoId: "missing",
       title: "Invalid",
       modelId: "openai/gpt-5.6-sol",
@@ -198,7 +203,7 @@ void test("rejects invalid session relationships without partial records", async
     }),
     /Repository not found/,
   );
-  assert.deepEqual(await store.listSessions(), []);
+  assert.deepEqual(await store.listTrajectories(), []);
 
   const firstRepo = await store.createRepo({
     owner: "example",
@@ -210,7 +215,7 @@ void test("rejects invalid session relationships without partial records", async
     name: "second-project",
     defaultBranch: "main",
   });
-  const parent = await store.createSession({
+  const parent = await store.createTrajectory({
     repoId: firstRepo.id,
     title: "Parent",
     modelId: "openai/gpt-5.6-sol",
@@ -221,7 +226,7 @@ void test("rejects invalid session relationships without partial records", async
   await waitForStatus(store, parent.id, "succeeded");
 
   await assert.rejects(
-    store.createSession({
+    store.createTrajectory({
       repoId: secondRepo.id,
       parentId: parent.id,
       title: "Invalid child",
@@ -233,14 +238,14 @@ void test("rejects invalid session relationships without partial records", async
     /different repository/,
   );
   assert.deepEqual(
-    (await store.listSessions()).map(({ id }) => id),
+    (await store.listTrajectories()).map(({ id }) => id),
     [parent.id],
   );
 });
 
 void test("persists worker failures and their terminal events", async (t) => {
   const dataDir = await mkdtemp(
-    path.join(os.tmpdir(), "llm-garage-session-failure-"),
+    path.join(os.tmpdir(), "llm-garage-trajectory-failure-"),
   );
   const dataSource = createAppDataSource(dataDir);
   t.after(async () => {
@@ -261,17 +266,17 @@ void test("persists worker failures and their terminal events", async (t) => {
     name: "failure-project",
     defaultBranch: "main",
   });
-  const session = await store.createSession({
+  const trajectory = await store.createTrajectory({
     repoId: repo.id,
-    title: "Fail the session",
+    title: "Fail the trajectory",
     modelId: "openai/gpt-5.6-sol",
     taskPrompt: "Exercise failure storage",
     createPr: false,
     autoMerge: false,
   });
 
-  await waitForStatus(store, session.id, "failed");
-  const [turn] = await store.listTurns(session.id);
+  await waitForStatus(store, trajectory.id, "failed");
+  const [turn] = await store.listTurns(trajectory.id);
   assert.equal(turn?.status, "failed");
   assert.ok(turn);
   assert.deepEqual(
@@ -289,12 +294,12 @@ void test("persists worker failures and their terminal events", async (t) => {
 
 async function waitForStatus(
   store: DataStore,
-  sessionId: string,
-  expected: SessionStatus,
+  trajectoryId: string,
+  expected: TrajectoryStatus,
 ): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if ((await store.getSession(sessionId))?.status === expected) return;
+    if ((await store.getTrajectory(trajectoryId))?.status === expected) return;
     await delay(10);
   }
-  assert.fail(`Session ${sessionId} did not reach ${expected}`);
+  assert.fail(`Trajectory ${trajectoryId} did not reach ${expected}`);
 }
