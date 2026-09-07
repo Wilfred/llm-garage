@@ -298,6 +298,7 @@ code {
 form.stack,
 .stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 .form-card {
@@ -456,6 +457,9 @@ a.stat-value {
   gap: 1.25rem;
   align-items: start;
 }
+.split > * {
+  min-width: 0;
+}
 .sticky {
   position: sticky;
   top: 92px;
@@ -474,10 +478,12 @@ a.stat-value {
 }
 .transcript {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 .continue-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.65rem;
 }
 .continue-form textarea {
