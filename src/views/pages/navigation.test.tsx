@@ -12,6 +12,7 @@ import {
   TrajectoriesPage,
 } from "./trajectories";
 import { ComparisonPage, type ComparisonColumn } from "./comparisons";
+import { SpendPage } from "./spend";
 
 const repos = createStarterRepos(new Date("2026-09-06T12:00:00Z").getTime());
 const trajectories: Trajectory[] = [
@@ -53,6 +54,7 @@ void test("renders the primary navigation", () => {
   assert.match(html, /🛠️/u);
   assert.match(html, /href="\/repos"/);
   assert.match(html, /href="\/trajectories"/);
+  assert.match(html, /href="\/spend"/);
   assert.equal(html.match(/href="\/trajectories\/new"/g)?.length, 1);
 });
 
@@ -171,6 +173,105 @@ void test("renders trajectory actions", () => {
   assert.match(html, /placeholder="Add another prompt…"/);
   assert.match(html, />Send<\/button>/);
   assert.match(html, /status-idle">idle<\/span>/);
+});
+
+void test("totals the trajectory cost below its transcript", () => {
+  const trajectory = trajectories.find(({ id }) => id === "trajectory-idle");
+  assert.ok(trajectory);
+  const turn = turnFor(trajectory);
+  const html = renderPage(
+    <TrajectoryDetailPage
+      trajectory={trajectory}
+      transcript={[
+        {
+          turn: {
+            ...turn,
+            usage: { inputTokens: 1200, outputTokens: 80, costUsd: 0.004 },
+          },
+          events: [],
+        },
+        {
+          turn: {
+            ...turn,
+            id: "turn-second",
+            usage: { inputTokens: 300, outputTokens: 20, costUsd: 0.001 },
+          },
+          events: [],
+        },
+      ]}
+    />,
+  );
+
+  assert.match(html, /\$0\.005/);
+  assert.match(html, /1,500 input · 100 output tokens/);
+  assert.ok(html.indexOf("$0.005") > html.lastIndexOf("</article>"));
+});
+
+void test("says so when a trajectory has recorded no usage", () => {
+  const trajectory = trajectories.find(({ id }) => id === "trajectory-idle");
+  assert.ok(trajectory);
+  const html = renderPage(
+    <TrajectoryDetailPage
+      trajectory={trajectory}
+      transcript={[{ turn: turnFor(trajectory), events: [] }]}
+    />,
+  );
+
+  assert.match(html, /No usage recorded yet\./);
+});
+
+void test("breaks spend down by model and repository", () => {
+  const html = renderPage(
+    <SpendPage
+      spend={{
+        trajectories: 3,
+        usage: { inputTokens: 4000, outputTokens: 500, costUsd: 1.25 },
+        byModel: [
+          {
+            id: "openai/gpt-5.6-sol",
+            label: "GPT-5.6 Sol",
+            trajectories: 2,
+            usage: { inputTokens: 3000, outputTokens: 400, costUsd: 1.25 },
+          },
+          {
+            id: "moonshotai/kimi-k3",
+            label: "Kimi K3",
+            trajectories: 1,
+            usage: { inputTokens: 1000, outputTokens: 100 },
+          },
+        ],
+        byRepo: [
+          {
+            id: "repo-garage",
+            label: "Wilfred/llm-garage",
+            trajectories: 3,
+            usage: { inputTokens: 4000, outputTokens: 500, costUsd: 1.25 },
+          },
+        ],
+        unpricedTurns: 1,
+      }}
+    />,
+  );
+
+  assert.match(html, /<h1>Spend<\/h1>/);
+  assert.match(html, /\$1\.25/);
+  assert.match(html, /4,500/);
+  assert.match(html, /GPT-5\.6 Sol/);
+  assert.match(html, /Kimi K3/);
+  assert.match(html, /Wilfred\/llm-garage/);
+  assert.match(html, /1 turn reported tokens without a cost/);
+  assert.match(html, /—/);
+});
+
+void test("invites a first trajectory when nothing has been spent", () => {
+  const html = renderPage(
+    <SpendPage
+      spend={{ trajectories: 0, byModel: [], byRepo: [], unpricedTurns: 0 }}
+    />,
+  );
+
+  assert.match(html, /No trajectories yet\./);
+  assert.match(html, /href="\/trajectories\/new"/);
 });
 
 void test("maps internal trajectory states to user-facing states", () => {

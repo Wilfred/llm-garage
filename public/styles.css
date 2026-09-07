@@ -662,6 +662,25 @@ pre.log {
 .system-info dd {
   margin: 0;
 }
+.usage-summary {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  margin: 0;
+  font-size: 0.82rem;
+}
+.usage-cost {
+  color: var(--accent);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+td.numeric,
+th.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 @media (max-width: 800px) {
   .site-header {
     padding: 0.8rem 5vw;

@@ -1,4 +1,5 @@
 import type { ModelId } from "../models";
+import type { TokenUsage } from "../usage";
 
 export type Repo = {
   id: string;
@@ -52,6 +53,7 @@ export type Turn = {
   kind: TurnKind;
   prompt: string;
   status: TurnStatus;
+  usage?: TokenUsage;
   createdAt: Date;
   finishedAt?: Date;
 };
@@ -91,6 +93,20 @@ export type CreateTrajectoriesInput = {
 
 export type DeleteRepoResult = "deleted" | "in_use" | "not_found";
 
+export type SpendTotals = {
+  trajectories: number;
+  usage?: TokenUsage;
+};
+
+export type SpendGroup = SpendTotals & { id: string; label: string };
+
+export type SpendReport = SpendTotals & {
+  byModel: SpendGroup[];
+  byRepo: SpendGroup[];
+  // Turns that reported tokens without a cost, so the totals understate spend.
+  unpricedTurns: number;
+};
+
 export interface DataStore {
   listRepos(): Promise<Repo[]>;
   getRepo(id: string): Promise<Repo | undefined>;
@@ -99,6 +115,7 @@ export interface DataStore {
   deleteRepo(id: string): Promise<DeleteRepoResult>;
 
   listTrajectories(): Promise<Trajectory[]>;
+  getSpend(): Promise<SpendReport>;
   getTrajectory(id: string): Promise<Trajectory | undefined>;
   createTrajectories(input: CreateTrajectoriesInput): Promise<Trajectory[]>;
   listComparison(comparisonId: string): Promise<Trajectory[]>;

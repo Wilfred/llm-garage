@@ -4,6 +4,7 @@ import { loadBuildInfo } from "../../build-info";
 import type { DataStore } from "../../store/types";
 import { AboutPage } from "../../views/pages/about";
 import { DashboardPage } from "../../views/pages/dashboard";
+import { SpendPage } from "../../views/pages/spend";
 import { renderPage } from "../../views/render";
 
 export function createPagesRouter(store: DataStore): Router {
@@ -20,6 +21,11 @@ export function createPagesRouter(store: DataStore): Router {
       .send(
         renderPage(<DashboardPage repos={repos} trajectories={trajectories} />),
       );
+  });
+
+  router.get("/spend", async (_req, res) => {
+    const spend = await store.getSpend();
+    res.type("html").send(renderPage(<SpendPage spend={spend} />));
   });
 
   router.get("/about", (_req, res) => {

@@ -7,6 +7,7 @@ import { TrajectoryEntity } from "../entities/trajectory";
 import { TurnEntity } from "../entities/turn";
 import { getModel, isModelId } from "../models";
 import { DisabledSandbox, type Sandbox } from "../sandbox/types";
+import { addUsage, sumUsage, type TokenUsage } from "../usage";
 import { DummyWorker } from "../worker/dummy";
 import type {
   ConversationMessage,
@@ -22,6 +23,9 @@ import type {
   DeleteRepoResult,
   Repo,
   RunEvent,
+  SpendGroup,
+  SpendReport,
+  SpendTotals,
   Trajectory,
   Turn,
 } from "./types";
@@ -119,6 +123,49 @@ export class DatabaseDataStore implements DataStore {
       order: { updatedAt: "DESC" },
     });
     return trajectories.map(toTrajectory);
+  }
+
+  async getSpend(): Promise<SpendReport> {
+    const [repos, trajectories, turns] = await Promise.all([
+      this.listRepos(),
+      this.listTrajectories(),
+      this.turnRepository.find({
+        select: {
+          trajectoryId: true,
+          inputTokens: true,
+          outputTokens: true,
+          costUsd: true,
+        },
+      }),
+    ]);
+
+    const usageByTrajectory = new Map<string, TokenUsage>();
+    let unpricedTurns = 0;
+    for (const turn of turns) {
+      const usage = toUsage(turn);
+      if (!usage) continue;
+      if (usage.costUsd === undefined) unpricedTurns += 1;
+      usageByTrajectory.set(
+        turn.trajectoryId,
+        addUsage(usageByTrajectory.get(turn.trajectoryId), usage),
+      );
+    }
+
+    return {
+      ...spendTotals(trajectories, usageByTrajectory),
+      byModel: groupSpend(trajectories, usageByTrajectory, (trajectory) => ({
+        id: trajectory.modelId,
+        label: getModel(trajectory.modelId).name,
+      })),
+      byRepo: groupSpend(trajectories, usageByTrajectory, (trajectory) => {
+        const repo = repos.find(({ id }) => id === trajectory.repoId);
+        return {
+          id: trajectory.repoId,
+          label: repo ? `${repo.owner}/${repo.name}` : "Unknown repository",
+        };
+      }),
+      unpricedTurns,
+    };
   }
 
   async getTrajectory(id: string): Promise<Trajectory | undefined> {
@@ -448,6 +495,14 @@ export class DatabaseDataStore implements DataStore {
       const now = this.now();
       trajectory.updatedAt = now;
       await manager.getRepository(TrajectoryEntity).save(trajectory);
+      if (event.kind === "usage") {
+        turn.inputTokens = (turn.inputTokens ?? 0) + event.usage.inputTokens;
+        turn.outputTokens = (turn.outputTokens ?? 0) + event.usage.outputTokens;
+        if (event.usage.costUsd !== undefined) {
+          turn.costUsd = (turn.costUsd ?? 0) + event.usage.costUsd;
+        }
+        await manager.getRepository(TurnEntity).save(turn);
+      }
       await this.appendEvent(
         manager,
         trajectoryId,
@@ -622,15 +677,66 @@ function toTrajectory(entity: TrajectoryEntity): Trajectory {
 }
 
 function toTurn(entity: TurnEntity): Turn {
+  const usage = toUsage(entity);
   return {
     id: entity.id,
     trajectoryId: entity.trajectoryId,
     kind: entity.kind,
     prompt: entity.prompt,
     status: entity.status,
+    ...(usage === undefined ? {} : { usage }),
     createdAt: entity.createdAt,
     ...(entity.finishedAt === null ? {} : { finishedAt: entity.finishedAt }),
   };
+}
+
+function toUsage(entity: TurnEntity): TokenUsage | undefined {
+  if (entity.inputTokens === null && entity.outputTokens === null) {
+    return undefined;
+  }
+  return {
+    inputTokens: entity.inputTokens ?? 0,
+    outputTokens: entity.outputTokens ?? 0,
+    ...(entity.costUsd === null ? {} : { costUsd: entity.costUsd }),
+  };
+}
+
+function spendTotals(
+  trajectories: Trajectory[],
+  usageByTrajectory: Map<string, TokenUsage>,
+): SpendTotals {
+  const usage = sumUsage(
+    trajectories.map(({ id }) => usageByTrajectory.get(id)),
+  );
+  return {
+    trajectories: trajectories.length,
+    ...(usage === undefined ? {} : { usage }),
+  };
+}
+
+function groupSpend(
+  trajectories: Trajectory[],
+  usageByTrajectory: Map<string, TokenUsage>,
+  key: (trajectory: Trajectory) => { id: string; label: string },
+): SpendGroup[] {
+  const groups = new Map<string, { label: string; members: Trajectory[] }>();
+  for (const trajectory of trajectories) {
+    const { id, label } = key(trajectory);
+    const group = groups.get(id) ?? { label, members: [] };
+    group.members.push(trajectory);
+    groups.set(id, group);
+  }
+  return [...groups]
+    .map(([id, { label, members }]) => ({
+      id,
+      label,
+      ...spendTotals(members, usageByTrajectory),
+    }))
+    .sort(
+      (left, right) =>
+        (right.usage?.costUsd ?? 0) - (left.usage?.costUsd ?? 0) ||
+        right.trajectories - left.trajectories,
+    );
 }
 
 function toRunEvent(entity: RunEventEntity): RunEvent {

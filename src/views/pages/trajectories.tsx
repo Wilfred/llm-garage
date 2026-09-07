@@ -1,6 +1,7 @@
 import type { Repo, RunEvent, Trajectory, Turn } from "../../store/types";
 import { modelCatalog } from "../../models";
-import { TrajectoryCards, StatusBadge } from "../components";
+import { sumUsage } from "../../usage";
+import { TrajectoryCards, StatusBadge, UsageSummary } from "../components";
 import { Layout } from "../layout";
 import { renderMarkdown } from "../markdown";
 
@@ -84,6 +85,7 @@ export function TrajectoryDetailPage({
     trajectory.status !== "archived";
   const canCancel =
     trajectory.status === "running" || trajectory.status === "queued";
+  const usage = sumUsage(transcript.map(({ turn }) => turn.usage));
   return (
     <Layout
       title={trajectory.title}
@@ -131,6 +133,7 @@ export function TrajectoryDetailPage({
           {transcript.map(({ turn, events }) => (
             <TurnCard turn={turn} events={events} />
           ))}
+          <UsageSummary usage={usage} />
           {canContinue && (
             <form
               class="continue-form"
