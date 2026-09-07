@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatUsage, type TokenUsage } from "../usage";
 import type { TrajectoryWorker, WorkerContext } from "./types";
 import type { WebToolProvider } from "./web-tools";
 
@@ -30,6 +31,7 @@ const completionSchema = z.object({
     .object({
       prompt_tokens: z.number().int().nonnegative(),
       completion_tokens: z.number().int().nonnegative(),
+      cost: z.number().nonnegative().optional(),
     })
     .optional(),
 });
@@ -180,10 +182,14 @@ export class OpenRouterWorker implements TrajectoryWorker {
         context.emit({ kind: "model_output", data: message.content });
       }
       if (completion.usage) {
-        context.emit({
-          kind: "usage",
-          data: `${completion.usage.prompt_tokens.toLocaleString("en-US")} input tokens · ${completion.usage.completion_tokens.toLocaleString("en-US")} output tokens`,
-        });
+        const usage: TokenUsage = {
+          inputTokens: completion.usage.prompt_tokens,
+          outputTokens: completion.usage.completion_tokens,
+          ...(completion.usage.cost === undefined
+            ? {}
+            : { costUsd: completion.usage.cost }),
+        };
+        context.emit({ kind: "usage", data: formatUsage(usage), usage });
       }
       if (!message.tool_calls?.length) {
         if (!message.content?.trim()) {
@@ -224,7 +230,12 @@ export class OpenRouterWorker implements TrajectoryWorker {
         "HTTP-Referer": "https://github.com/Wilfred/llm-garage",
         "X-OpenRouter-Title": "LLM Garage",
       },
-      body: JSON.stringify({ model: context.modelId, messages, tools }),
+      body: JSON.stringify({
+        model: context.modelId,
+        messages,
+        tools,
+        usage: { include: true },
+      }),
       signal: context.signal,
     });
 

@@ -14,6 +14,7 @@ import type {
   Trajectory,
   TrajectoryStatus,
 } from "./types";
+import { formatUsage, type TokenUsage } from "../usage";
 import type { ConversationMessage } from "../worker/types";
 import type { Sandbox } from "../sandbox/types";
 
@@ -522,6 +523,85 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
   ]);
   assert.equal(await store.archiveTrajectory(trajectory.id), true);
   assert.deepEqual(archived, [trajectory.id]);
+});
+
+void test("aggregates recorded usage into a spend report", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-spend-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const priced: TokenUsage = {
+    inputTokens: 100,
+    outputTokens: 10,
+    costUsd: 0.25,
+  };
+  const unpriced: TokenUsage = { inputTokens: 200, outputTokens: 20 };
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        const usage =
+          context.modelId === "openai/gpt-5.6-sol" ? priced : unpriced;
+        context.emit({ kind: "usage", data: formatUsage(usage), usage });
+        context.emit({ kind: "model_output", data: "Done" });
+      },
+    },
+  });
+  await store.initialize();
+
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "spend-project",
+    defaultBranch: "main",
+    autoMerge: false,
+  });
+  const trajectories = await store.createTrajectories({
+    repoId: repo.id,
+    title: "Spend on both models",
+    modelIds: ["openai/gpt-5.6-sol", "anthropic/claude-opus-5"],
+    taskPrompt: "Answer the same question",
+  });
+  for (const trajectory of trajectories)
+    await waitForStatus(store, trajectory.id, "succeeded");
+
+  const [pricedTrajectory] = trajectories;
+  assert.ok(pricedTrajectory);
+  const [pricedTurn] = await store.listTurns(pricedTrajectory.id);
+  assert.deepEqual(pricedTurn?.usage, priced);
+
+  const spend = await store.getSpend();
+  assert.equal(spend.trajectories, 2);
+  assert.deepEqual(spend.usage, {
+    inputTokens: 300,
+    outputTokens: 30,
+    costUsd: 0.25,
+  });
+  assert.equal(spend.unpricedTurns, 1);
+  assert.deepEqual(spend.byModel, [
+    {
+      id: "openai/gpt-5.6-sol",
+      label: "GPT-5.6 Sol",
+      trajectories: 1,
+      usage: priced,
+    },
+    {
+      id: "anthropic/claude-opus-5",
+      label: "Claude Opus 5",
+      trajectories: 1,
+      usage: unpriced,
+    },
+  ]);
+  assert.deepEqual(spend.byRepo, [
+    {
+      id: repo.id,
+      label: "example/spend-project",
+      trajectories: 2,
+      usage: { inputTokens: 300, outputTokens: 30, costUsd: 0.25 },
+    },
+  ]);
 });
 
 async function waitForStatus(

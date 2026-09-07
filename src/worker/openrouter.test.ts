@@ -13,7 +13,7 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
         choices: [
           { message: { role: "assistant", content: "A useful answer" } },
         ],
-        usage: { prompt_tokens: 1250, completion_tokens: 42 },
+        usage: { prompt_tokens: 1250, completion_tokens: 42, cost: 0.0125 },
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
@@ -69,9 +69,14 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
     ),
     ["run_command", "fetch_url", "search_web"],
   );
+  assert.deepEqual((body as { usage: unknown }).usage, { include: true });
   assert.deepEqual(events, [
     { kind: "model_output", data: "A useful answer" },
-    { kind: "usage", data: "1,250 input tokens · 42 output tokens" },
+    {
+      kind: "usage",
+      data: "1,250 input tokens · 42 output tokens · $0.0125",
+      usage: { inputTokens: 1250, outputTokens: 42, costUsd: 0.0125 },
+    },
   ]);
 });
 

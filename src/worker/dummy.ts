@@ -1,5 +1,12 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { formatUsage, type TokenUsage } from "../usage";
 import type { TrajectoryWorker, WorkerContext, WorkerEvent } from "./types";
+
+const dummyUsage: TokenUsage = {
+  inputTokens: 1248,
+  outputTokens: 286,
+  costUsd: 0.0042,
+};
 
 export type DummyWorkerOptions = {
   stepDelayMs?: number;
@@ -52,7 +59,8 @@ export class DummyWorker implements TrajectoryWorker {
       },
       {
         kind: "usage",
-        data: "1,248 input tokens · 286 output tokens · $0.0042",
+        data: formatUsage(dummyUsage),
+        usage: dummyUsage,
       },
       {
         kind: "model_output",

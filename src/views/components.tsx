@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import type { Repo, Trajectory, TrajectoryStatus } from "../store/types";
 import { getModel } from "../models";
+import { formatTokens, formatUsd, type TokenUsage } from "../usage";
 
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
@@ -21,6 +22,23 @@ export function trajectoryDisplayStatus(
   if (status === "failed") return "errored";
   if (status === "archived") return "archive";
   return "idle";
+}
+
+export function UsageSummary({ usage }: { usage: TokenUsage | undefined }) {
+  if (!usage) return <p class="usage-summary muted">No usage recorded yet.</p>;
+  return (
+    <p class="usage-summary">
+      <span class="usage-cost">
+        {usage.costUsd === undefined
+          ? "Cost not reported"
+          : formatUsd(usage.costUsd)}
+      </span>
+      <span class="muted">
+        {formatTokens(usage.inputTokens)} input ·{" "}
+        {formatTokens(usage.outputTokens)} output tokens
+      </span>
+    </p>
+  );
 }
 
 export function EmptyState({ children }: { children: ComponentChildren }) {

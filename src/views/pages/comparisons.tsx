@@ -1,6 +1,7 @@
 import type { Repo, Trajectory } from "../../store/types";
 import { getModel } from "../../models";
-import { StatusBadge } from "../components";
+import { sumUsage } from "../../usage";
+import { StatusBadge, UsageSummary } from "../components";
 import { Layout } from "../layout";
 import { renderMarkdown } from "../markdown";
 import type { TurnTranscript } from "./trajectories";
@@ -53,6 +54,9 @@ export function ComparisonPage({
             {transcript.map(({ turn, events }, index) => (
               <ComparisonTurn turn={turn} events={events} first={index === 0} />
             ))}
+            <UsageSummary
+              usage={sumUsage(transcript.map(({ turn }) => turn.usage))}
+            />
           </section>
         ))}
       </div>

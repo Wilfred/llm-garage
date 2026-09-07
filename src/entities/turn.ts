@@ -36,6 +36,15 @@ export class TurnEntity {
   @Column("simple-enum", { enum: turnStatuses })
   status!: TurnStatus;
 
+  @Column("integer", { nullable: true })
+  inputTokens!: number | null;
+
+  @Column("integer", { nullable: true })
+  outputTokens!: number | null;
+
+  @Column("real", { nullable: true })
+  costUsd!: number | null;
+
   @Column("datetime")
   createdAt!: Date;
 
