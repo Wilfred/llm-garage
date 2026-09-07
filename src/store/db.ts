@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Mutex } from "async-mutex";
 import type { DataSource, EntityManager, Repository } from "typeorm";
 import { RepoEntity } from "../entities/repo";
 import { RunEventEntity } from "../entities/run-event";
@@ -16,7 +17,7 @@ import { RepoAlreadyExistsError } from "./errors";
 import { createStarterRepos } from "./seed";
 import type {
   CreateRepoInput,
-  CreateTrajectoryInput,
+  CreateTrajectoriesInput,
   DataStore,
   DeleteRepoResult,
   Repo,
@@ -38,6 +39,9 @@ export class DatabaseDataStore implements DataStore {
   private readonly turnRepository: Repository<TurnEntity>;
   private readonly eventRepository: Repository<RunEventEntity>;
   private readonly activeWorkers = new Map<string, AbortController>();
+  // The better-sqlite3 driver holds a single connection, so overlapping
+  // transactions from concurrent workers would nest and fail.
+  private readonly writeLock = new Mutex();
   private readonly worker: TrajectoryWorker;
   private readonly sandbox: Sandbox;
   private readonly seed: boolean;
@@ -97,7 +101,7 @@ export class DatabaseDataStore implements DataStore {
   }
 
   async deleteRepo(id: string): Promise<DeleteRepoResult> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.transaction(async (manager) => {
       const repoRepository = manager.getRepository(RepoEntity);
       if (!(await repoRepository.existsBy({ id }))) return "not_found";
       if (
@@ -122,8 +126,12 @@ export class DatabaseDataStore implements DataStore {
     return trajectory ? toTrajectory(trajectory) : undefined;
   }
 
-  async createTrajectory(input: CreateTrajectoryInput): Promise<Trajectory> {
-    const result = await this.dataSource.transaction(async (manager) => {
+  async createTrajectories(
+    input: CreateTrajectoriesInput,
+  ): Promise<Trajectory[]> {
+    if (input.modelIds.length === 0) throw new Error("No models selected");
+
+    const created = await this.transaction(async (manager) => {
       if (
         !(await manager
           .getRepository(RepoEntity)
@@ -143,43 +151,58 @@ export class DatabaseDataStore implements DataStore {
         throw new Error("Parent trajectory belongs to a different repository");
       }
 
-      const now = this.now();
-      const id = randomUUID();
-      const trajectory = await manager.getRepository(TrajectoryEntity).save({
-        id,
-        parentId: parent?.id ?? null,
-        rootId: parent?.rootId ?? id,
-        repoId: input.repoId,
-        title: input.title,
-        status: "running",
-        modelId: input.modelId,
-        taskPrompt: input.taskPrompt,
-        prUrl: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      const turn = await manager.getRepository(TurnEntity).save({
-        id: randomUUID(),
-        trajectoryId: trajectory.id,
-        kind: parent ? "spawn" : "initial",
-        prompt: input.taskPrompt,
-        status: "running",
-        createdAt: now,
-        finishedAt: null,
-      });
-      await this.appendEvent(
-        manager,
-        trajectory.id,
-        turn.id,
-        "status",
-        `${getModel(input.modelId).name} started`,
-        now,
-      );
-      return { trajectory: toTrajectory(trajectory), turnId: turn.id };
+      const comparisonId = input.modelIds.length > 1 ? randomUUID() : null;
+      const started: Array<{ trajectory: Trajectory; turnId: string }> = [];
+      for (const modelId of input.modelIds) {
+        const now = this.now();
+        const id = randomUUID();
+        const trajectory = await manager.getRepository(TrajectoryEntity).save({
+          id,
+          parentId: parent?.id ?? null,
+          rootId: parent?.rootId ?? id,
+          comparisonId,
+          repoId: input.repoId,
+          title: input.title,
+          status: "running",
+          modelId,
+          taskPrompt: input.taskPrompt,
+          prUrl: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        const turn = await manager.getRepository(TurnEntity).save({
+          id: randomUUID(),
+          trajectoryId: trajectory.id,
+          kind: parent ? "spawn" : "initial",
+          prompt: input.taskPrompt,
+          status: "running",
+          createdAt: now,
+          finishedAt: null,
+        });
+        await this.appendEvent(
+          manager,
+          trajectory.id,
+          turn.id,
+          "status",
+          `${getModel(modelId).name} started`,
+          now,
+        );
+        started.push({ trajectory: toTrajectory(trajectory), turnId: turn.id });
+      }
+      return started;
     });
 
-    this.startWorker(result.trajectory.id, result.turnId);
-    return result.trajectory;
+    for (const { trajectory, turnId } of created)
+      this.startWorker(trajectory.id, turnId);
+    return created.map(({ trajectory }) => trajectory);
+  }
+
+  async listComparison(comparisonId: string): Promise<Trajectory[]> {
+    const trajectories = await this.trajectoryRepository.find({
+      where: { comparisonId },
+      order: { createdAt: "ASC" },
+    });
+    return trajectories.map(toTrajectory);
   }
 
   async listTurns(trajectoryId: string): Promise<Turn[]> {
@@ -199,7 +222,7 @@ export class DatabaseDataStore implements DataStore {
   }
 
   async addFeedback(trajectoryId: string, feedback: string): Promise<Turn> {
-    const turn = await this.dataSource.transaction(async (manager) => {
+    const turn = await this.transaction(async (manager) => {
       const trajectoryRepository = manager.getRepository(TrajectoryEntity);
       const trajectory = await trajectoryRepository.findOneBy({
         id: trajectoryId,
@@ -243,7 +266,7 @@ export class DatabaseDataStore implements DataStore {
 
   async cancelTrajectory(trajectoryId: string): Promise<boolean> {
     this.stopWorker(trajectoryId);
-    return this.dataSource.transaction(async (manager) => {
+    return this.transaction(async (manager) => {
       const trajectoryRepository = manager.getRepository(TrajectoryEntity);
       const trajectory = await trajectoryRepository.findOneBy({
         id: trajectoryId,
@@ -282,7 +305,7 @@ export class DatabaseDataStore implements DataStore {
     const existing = await this.getTrajectory(trajectoryId);
     if (!existing || existing.status === "archived") return false;
     await this.sandbox.archive(trajectoryId);
-    return this.dataSource.transaction(async (manager) => {
+    return this.transaction(async (manager) => {
       const trajectoryRepository = manager.getRepository(TrajectoryEntity);
       const trajectory = await trajectoryRepository.findOneBy({
         id: trajectoryId,
@@ -412,7 +435,7 @@ export class DatabaseDataStore implements DataStore {
     turnId: string,
     event: WorkerEvent,
   ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
+    await this.transaction(async (manager) => {
       const trajectory = await manager
         .getRepository(TrajectoryEntity)
         .findOneBy({ id: trajectoryId });
@@ -440,7 +463,7 @@ export class DatabaseDataStore implements DataStore {
     trajectoryId: string,
     turnId: string,
   ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
+    await this.transaction(async (manager) => {
       const trajectory = await manager
         .getRepository(TrajectoryEntity)
         .findOneBy({ id: trajectoryId });
@@ -473,7 +496,7 @@ export class DatabaseDataStore implements DataStore {
     turnId: string,
     error: unknown,
   ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
+    await this.transaction(async (manager) => {
       const trajectory = await manager
         .getRepository(TrajectoryEntity)
         .findOneBy({ id: trajectoryId });
@@ -557,6 +580,12 @@ export class DatabaseDataStore implements DataStore {
     });
   }
 
+  private transaction<T>(
+    work: (manager: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    return this.writeLock.runExclusive(() => this.dataSource.transaction(work));
+  }
+
   private stopWorker(trajectoryId: string): void {
     this.activeWorkers.get(trajectoryId)?.abort();
     this.activeWorkers.delete(trajectoryId);
@@ -578,6 +607,9 @@ function toTrajectory(entity: TrajectoryEntity): Trajectory {
     id: entity.id,
     ...(entity.parentId === null ? {} : { parentId: entity.parentId }),
     rootId: entity.rootId,
+    ...(entity.comparisonId === null
+      ? {}
+      : { comparisonId: entity.comparisonId }),
     repoId: entity.repoId,
     title: entity.title,
     status: entity.status,

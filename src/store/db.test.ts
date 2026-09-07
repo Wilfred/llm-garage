@@ -8,7 +8,12 @@ import type { DataSource } from "typeorm";
 import { createAppDataSource } from "../db/data-source";
 import { RepoAlreadyExistsError } from "./errors";
 import { DatabaseDataStore } from "./db";
-import type { DataStore, TrajectoryStatus } from "./types";
+import type {
+  CreateTrajectoriesInput,
+  DataStore,
+  Trajectory,
+  TrajectoryStatus,
+} from "./types";
 import type { ConversationMessage } from "../worker/types";
 import type { Sandbox } from "../sandbox/types";
 
@@ -95,10 +100,10 @@ void test("persists trajectories, turns, and ordered events across restarts", as
     RepoAlreadyExistsError,
   );
 
-  const trajectory = await store.createTrajectory({
+  const trajectory = await createOne(store, {
     repoId: repo.id,
     title: "Persist the trajectory",
-    modelId: "openai/gpt-5.6-sol",
+    modelIds: ["openai/gpt-5.6-sol"],
     taskPrompt: "Exercise the database store",
   });
   const [runningTurn] = await store.listTurns(trajectory.id);
@@ -168,10 +173,10 @@ void test("commits cancellation state and its event together", async (t) => {
     defaultBranch: "main",
     autoMerge: false,
   });
-  const trajectory = await store.createTrajectory({
+  const trajectory = await createOne(store, {
     repoId: repo.id,
     title: "Cancel the trajectory",
-    modelId: "openai/gpt-5.6-sol",
+    modelIds: ["openai/gpt-5.6-sol"],
     taskPrompt: "Wait for cancellation",
   });
 
@@ -215,10 +220,10 @@ void test("sends persisted conversation history to each worker turn", async (t) 
     defaultBranch: "main",
     autoMerge: false,
   });
-  const trajectory = await store.createTrajectory({
+  const trajectory = await createOne(store, {
     repoId: repo.id,
     title: "Have a conversation",
-    modelId: "anthropic/claude-opus-5",
+    modelIds: ["anthropic/claude-opus-5"],
     taskPrompt: "First question",
   });
   await waitForStatus(store, trajectory.id, "succeeded");
@@ -234,6 +239,117 @@ void test("sends persisted conversation history to each worker turn", async (t) 
       { role: "user", content: "Follow-up question" },
     ],
   ]);
+});
+
+void test("runs one trajectory per selected model in a comparison", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-compare-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        context.emit({
+          kind: "model_output",
+          data: `${context.modelName} answered`,
+        });
+      },
+    },
+  });
+  await store.initialize();
+
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "compare-project",
+    defaultBranch: "main",
+    autoMerge: false,
+  });
+  const modelIds = [
+    "openai/gpt-5.6-sol",
+    "anthropic/claude-opus-5",
+  ] satisfies Trajectory["modelId"][];
+  const trajectories = await store.createTrajectories({
+    repoId: repo.id,
+    title: "Compare the models",
+    modelIds,
+    taskPrompt: "Answer the same question",
+  });
+
+  assert.deepEqual(
+    trajectories.map(({ modelId }) => modelId),
+    modelIds,
+  );
+  const comparisonId = trajectories[0]?.comparisonId;
+  assert.ok(comparisonId);
+  assert.ok(
+    trajectories.every(
+      (trajectory) => trajectory.comparisonId === comparisonId,
+    ),
+  );
+  for (const trajectory of trajectories)
+    await waitForStatus(store, trajectory.id, "succeeded");
+
+  const comparison = await store.listComparison(comparisonId);
+  assert.deepEqual(
+    comparison.map(({ id }) => id),
+    trajectories.map(({ id }) => id),
+  );
+  const outputs = await Promise.all(
+    comparison.map(async (trajectory) => {
+      const [turn] = await store.listTurns(trajectory.id);
+      assert.ok(turn);
+      return (await store.listRunEvents(turn.id))
+        .filter((event) => event.kind === "model_output")
+        .map((event) => event.data);
+    }),
+  );
+  assert.deepEqual(outputs, [
+    ["GPT-5.6 Sol answered"],
+    ["Claude Opus 5 answered"],
+  ]);
+});
+
+void test("leaves a single-model trajectory out of any comparison", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-single-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: { run: async () => undefined },
+  });
+  await store.initialize();
+
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "single-project",
+    defaultBranch: "main",
+    autoMerge: false,
+  });
+  const trajectory = await createOne(store, {
+    repoId: repo.id,
+    title: "Just one model",
+    modelIds: ["openai/gpt-5.6-sol"],
+    taskPrompt: "Answer once",
+  });
+
+  assert.equal(trajectory.comparisonId, undefined);
+  await assert.rejects(
+    store.createTrajectories({
+      repoId: repo.id,
+      title: "No models",
+      modelIds: [],
+      taskPrompt: "Nothing to run",
+    }),
+    /No models selected/,
+  );
 });
 
 void test("rejects invalid trajectory relationships without partial records", async (t) => {
@@ -253,10 +369,10 @@ void test("rejects invalid trajectory relationships without partial records", as
   await store.initialize();
 
   await assert.rejects(
-    store.createTrajectory({
+    createOne(store, {
       repoId: "missing",
       title: "Invalid",
-      modelId: "openai/gpt-5.6-sol",
+      modelIds: ["openai/gpt-5.6-sol"],
       taskPrompt: "Do not persist this",
     }),
     /Repository not found/,
@@ -275,20 +391,20 @@ void test("rejects invalid trajectory relationships without partial records", as
     defaultBranch: "main",
     autoMerge: false,
   });
-  const parent = await store.createTrajectory({
+  const parent = await createOne(store, {
     repoId: firstRepo.id,
     title: "Parent",
-    modelId: "openai/gpt-5.6-sol",
+    modelIds: ["openai/gpt-5.6-sol"],
     taskPrompt: "Create the parent",
   });
   await waitForStatus(store, parent.id, "succeeded");
 
   await assert.rejects(
-    store.createTrajectory({
+    createOne(store, {
       repoId: secondRepo.id,
       parentId: parent.id,
       title: "Invalid child",
-      modelId: "openai/gpt-5.6-sol",
+      modelIds: ["openai/gpt-5.6-sol"],
       taskPrompt: "Cross repository boundaries",
     }),
     /different repository/,
@@ -323,10 +439,10 @@ void test("persists worker failures and their terminal events", async (t) => {
     defaultBranch: "main",
     autoMerge: false,
   });
-  const trajectory = await store.createTrajectory({
+  const trajectory = await createOne(store, {
     repoId: repo.id,
     title: "Fail the trajectory",
-    modelId: "openai/gpt-5.6-sol",
+    modelIds: ["openai/gpt-5.6-sol"],
     taskPrompt: "Exercise failure storage",
   });
 
@@ -392,10 +508,10 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
     defaultBranch: "main",
     autoMerge: false,
   });
-  const trajectory = await store.createTrajectory({
+  const trajectory = await createOne(store, {
     repoId: repo.id,
     title: "Use a sandbox",
-    modelId: "openai/gpt-5.6-sol",
+    modelIds: ["openai/gpt-5.6-sol"],
     taskPrompt: "List the root directory",
   });
 
@@ -427,4 +543,13 @@ function assertOrdered(sequence: number[]): void {
     sequence,
     [...sequence].sort((left, right) => left - right),
   );
+}
+
+async function createOne(
+  store: DataStore,
+  input: CreateTrajectoriesInput,
+): Promise<Trajectory> {
+  const [trajectory] = await store.createTrajectories(input);
+  assert.ok(trajectory);
+  return trajectory;
 }

@@ -1,16 +1,18 @@
-import MarkdownIt from "markdown-it";
 import type { Repo, RunEvent, Trajectory, Turn } from "../../store/types";
 import { modelCatalog } from "../../models";
 import { TrajectoryCards, StatusBadge } from "../components";
 import { Layout } from "../layout";
+import { renderMarkdown } from "../markdown";
 
 export function NewTrajectoryPage({
   repos,
   selectedRepoId,
+  selectedModelIds = [modelCatalog[0].id],
   error,
 }: {
   repos: Repo[];
   selectedRepoId?: string;
+  selectedModelIds?: string[];
   error?: string;
 }) {
   return (
@@ -18,7 +20,10 @@ export function NewTrajectoryPage({
       <div class="page-header">
         <div>
           <h1>New trajectory</h1>
-          <p>Talk to a model through OpenRouter.</p>
+          <p>
+            Talk to models through OpenRouter. Pick several to run the same task
+            side by side.
+          </p>
         </div>
       </div>
       {error && <div class="notice">{error}</div>}
@@ -29,21 +34,25 @@ export function NewTrajectoryPage({
         </div>
       ) : (
         <form class="card stack form-card" method="post" action="/trajectories">
-          <div class="field-row">
-            <select name="repoId" required aria-label="Repository">
-              {repos.map((repo) => (
-                <option value={repo.id} selected={repo.id === selectedRepoId}>
-                  {repo.owner}/{repo.name}
-                </option>
-              ))}
-            </select>
-            <select name="modelId" required aria-label="Model">
-              {modelCatalog.map((model) => (
-                <option value={model.id}>
-                  {model.name} · {model.provider}
-                </option>
-              ))}
-            </select>
+          <select name="repoId" required aria-label="Repository">
+            {repos.map((repo) => (
+              <option value={repo.id} selected={repo.id === selectedRepoId}>
+                {repo.owner}/{repo.name}
+              </option>
+            ))}
+          </select>
+          <div class="check-row" role="group" aria-label="Models">
+            {modelCatalog.map((model) => (
+              <label class="check">
+                <input
+                  type="checkbox"
+                  name="modelIds"
+                  value={model.id}
+                  checked={selectedModelIds.includes(model.id)}
+                />
+                {model.name} · {model.provider}
+              </label>
+            ))}
           </div>
           <textarea
             name="taskPrompt"
@@ -61,10 +70,6 @@ export function NewTrajectoryPage({
 }
 
 export type TurnTranscript = { turn: Turn; events: RunEvent[] };
-
-// html: false escapes any raw HTML in model output, so the rendered
-// markdown needs no separate sanitiser.
-const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
 export function TrajectoryDetailPage({
   trajectory,
@@ -88,6 +93,12 @@ export function TrajectoryDetailPage({
       <div class="breadcrumb">
         <a href="/trajectories">Trajectories</a>
         <span>/</span>
+        {trajectory.comparisonId && (
+          <>
+            <a href={`/comparisons/${trajectory.comparisonId}`}>Comparison</a>
+            <span>/</span>
+          </>
+        )}
         <strong>{trajectory.title}</strong>
       </div>
       <div class="detail-toolbar">
@@ -163,7 +174,7 @@ function TurnCard({ turn, events }: TurnTranscript) {
       {output ? (
         <div
           class="model-output"
-          dangerouslySetInnerHTML={{ __html: markdown.render(output) }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
         />
       ) : (
         <p class="model-output empty-output">No output yet.</p>

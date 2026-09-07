@@ -24,6 +24,7 @@ export type Trajectory = {
   id: string;
   parentId?: string;
   rootId: string;
+  comparisonId?: string;
   repoId: string;
   title: string;
   status: TrajectoryStatus;
@@ -80,11 +81,11 @@ export type CreateRepoInput = Pick<
   "owner" | "name" | "defaultBranch" | "autoMerge"
 >;
 
-export type CreateTrajectoryInput = {
+export type CreateTrajectoriesInput = {
   repoId: string;
   parentId?: string;
   title: string;
-  modelId: ModelId;
+  modelIds: ModelId[];
   taskPrompt: string;
 };
 
@@ -99,7 +100,8 @@ export interface DataStore {
 
   listTrajectories(): Promise<Trajectory[]>;
   getTrajectory(id: string): Promise<Trajectory | undefined>;
-  createTrajectory(input: CreateTrajectoryInput): Promise<Trajectory>;
+  createTrajectories(input: CreateTrajectoriesInput): Promise<Trajectory[]>;
+  listComparison(comparisonId: string): Promise<Trajectory[]>;
   listTurns(trajectoryId: string): Promise<Turn[]>;
   listRunEvents(turnId: string): Promise<RunEvent[]>;
   addFeedback(trajectoryId: string, feedback: string): Promise<Turn>;

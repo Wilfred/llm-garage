@@ -19,6 +19,7 @@
   "author": "Wilfred Hughes",
   "license": "MIT",
   "dependencies": {
+    "async-mutex": "^0.5.0",
     "better-sqlite3": "^12.11.1",
     "dockerode": "^5.0.1",
     "dotenv": "^17.4.2",

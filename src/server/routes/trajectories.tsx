@@ -8,8 +8,9 @@ import {
   TrajectoriesPage,
   type TurnTranscript,
 } from "../../views/pages/trajectories";
+import { ComparisonPage } from "../../views/pages/comparisons";
 import { renderPage } from "../../views/render";
-import { formField, queryString } from "./forms";
+import { formField, formFields, queryString } from "./forms";
 
 export function createTrajectoriesRouter(store: DataStore): Router {
   const router = Router();
@@ -56,8 +57,13 @@ export function createTrajectoriesRouter(store: DataStore): Router {
   router.post("/trajectories", async (req, res) => {
     const repoId = formField(req.body, "repoId");
     const taskPrompt = formField(req.body, "taskPrompt");
-    const modelId = formField(req.body, "modelId");
-    if (!repoId || !taskPrompt || !isModelId(modelId)) {
+    const modelIds = formFields(req.body, "modelIds");
+    if (
+      !repoId ||
+      !taskPrompt ||
+      modelIds.length === 0 ||
+      !modelIds.every(isModelId)
+    ) {
       const repos = await store.listRepos();
       res
         .status(400)
@@ -67,19 +73,61 @@ export function createTrajectoriesRouter(store: DataStore): Router {
             <NewTrajectoryPage
               repos={repos}
               selectedRepoId={repoId}
-              error="Repository, model, and task are required."
+              selectedModelIds={modelIds}
+              error="Repository, at least one model, and task are required."
             />,
           ),
         );
       return;
     }
-    const trajectory = await store.createTrajectory({
+    const [trajectory] = await store.createTrajectories({
       repoId,
       title: titleFromTask(taskPrompt),
       taskPrompt,
-      modelId,
+      modelIds,
     });
-    res.redirect(303, `/trajectories/${trajectory.id}`);
+    if (!trajectory) throw new Error("No trajectory was started");
+    res.redirect(
+      303,
+      trajectory.comparisonId
+        ? `/comparisons/${trajectory.comparisonId}`
+        : `/trajectories/${trajectory.id}`,
+    );
+  });
+
+  router.get("/comparisons/:id", async (req, res) => {
+    const trajectories = await store.listComparison(req.params.id);
+    const first = trajectories[0];
+    if (!first) {
+      res
+        .status(404)
+        .type("html")
+        .send(
+          renderPage(
+            <NotFoundPage message="That comparison does not exist." />,
+          ),
+        );
+      return;
+    }
+    const [repo, columns] = await Promise.all([
+      store.getRepo(first.repoId),
+      Promise.all(
+        trajectories.map(async (trajectory) => ({
+          trajectory,
+          transcript: await loadTranscript(store, trajectory.id),
+        })),
+      ),
+    ]);
+    res
+      .type("html")
+      .send(
+        renderPage(
+          <ComparisonPage
+            columns={columns}
+            {...(repo === undefined ? {} : { repo })}
+          />,
+        ),
+      );
   });
 
   router.get("/trajectories/:id", async (req, res) => {
@@ -95,13 +143,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         );
       return;
     }
-    const turns = await store.listTurns(trajectory.id);
-    const transcript: TurnTranscript[] = await Promise.all(
-      turns.map(async (turn) => ({
-        turn,
-        events: await store.listRunEvents(turn.id),
-      })),
-    );
+    const transcript = await loadTranscript(store, trajectory.id);
     res
       .type("html")
       .send(
@@ -131,6 +173,19 @@ export function createTrajectoriesRouter(store: DataStore): Router {
   });
 
   return router;
+}
+
+async function loadTranscript(
+  store: DataStore,
+  trajectoryId: string,
+): Promise<TurnTranscript[]> {
+  const turns = await store.listTurns(trajectoryId);
+  return Promise.all(
+    turns.map(async (turn) => ({
+      turn,
+      events: await store.listRunEvents(turn.id),
+    })),
+  );
 }
 
 export function titleFromTask(taskPrompt: string): string {
