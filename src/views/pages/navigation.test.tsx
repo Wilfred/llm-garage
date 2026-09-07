@@ -89,7 +89,7 @@ void test("renders repository creation on its own page", () => {
     html,
     /<form class="card stack form-card" method="post" action="\/repos">/,
   );
-  assert.match(html, /<h1>Add repository<\/h1>/);
+  assert.match(html, /<h1 class="page-intro">Add repository<\/h1>/);
 });
 
 void test("renders repository details and trajectory counts", () => {

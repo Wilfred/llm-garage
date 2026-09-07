@@ -18,9 +18,7 @@ export function ReposPage({
   return (
     <Layout title="Repositories" section="repos">
       <div class="page-header">
-        <div>
-          <h1>Repositories</h1>
-        </div>
+        <h1>Repositories</h1>
         <a class="button button-primary" href="/repos/new">
           Add repository
         </a>
@@ -82,11 +80,7 @@ export function NewRepoPage({ error }: { error?: string }) {
         <span>/</span>
         <strong>Add repository</strong>
       </div>
-      <div class="page-header">
-        <div>
-          <h1>Add repository</h1>
-        </div>
-      </div>
+      <h1 class="page-intro">Add repository</h1>
       {error && <div class="notice">{error}</div>}
       <form class="card stack form-card" method="post" action="/repos">
         <label>
@@ -149,11 +143,9 @@ export function RepoDetailPage({
         </strong>
       </div>
       <div class="page-header">
-        <div>
-          <h1>
-            {repo.owner}/{repo.name}
-          </h1>
-        </div>
+        <h1>
+          {repo.owner}/{repo.name}
+        </h1>
         <div class="actions">
           <a
             class="button button-primary"

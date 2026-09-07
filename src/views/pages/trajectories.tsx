@@ -17,14 +17,12 @@ export function NewTrajectoryPage({
 }) {
   return (
     <Layout title="New trajectory" section="trajectories">
-      <div class="page-header">
-        <div>
-          <h1>New trajectory</h1>
-          <p>
-            Talk to models through OpenRouter. Pick several to run the same task
-            side by side.
-          </p>
-        </div>
+      <div class="page-intro">
+        <h1>New trajectory</h1>
+        <p>
+          Talk to models through OpenRouter. Pick several to run the same task
+          side by side.
+        </p>
       </div>
       {error && <div class="notice">{error}</div>}
       {repos.length === 0 ? (
@@ -209,19 +207,17 @@ export function TrajectoriesPage({
 }) {
   return (
     <Layout title="Trajectories" section="trajectories">
-      <div class="page-header">
-        <div>
-          <h1>Trajectories</h1>
-          {selectedRepo && (
-            <p>
-              Showing trajectories for{" "}
-              <a href={`/repos/${selectedRepo.id}`}>
-                {selectedRepo.owner}/{selectedRepo.name}
-              </a>
-              . <a href="/trajectories">Clear filter</a>
-            </p>
-          )}
-        </div>
+      <div class="page-intro">
+        <h1>Trajectories</h1>
+        {selectedRepo && (
+          <p>
+            Showing trajectories for{" "}
+            <a href={`/repos/${selectedRepo.id}`}>
+              {selectedRepo.owner}/{selectedRepo.name}
+            </a>
+            . <a href="/trajectories">Clear filter</a>
+          </p>
+        )}
       </div>
       <TrajectoryCards trajectories={trajectories} repos={repos} />
     </Layout>
@@ -235,12 +231,10 @@ export function NotFoundPage({
 }) {
   return (
     <Layout title="Not found">
-      <div class="page-header">
-        <div>
-          <div class="eyebrow">404</div>
-          <h1>Not found</h1>
-          <p>{message}</p>
-        </div>
+      <div class="page-intro">
+        <div class="eyebrow">404</div>
+        <h1>Not found</h1>
+        <p>{message}</p>
       </div>
       <a class="button" href="/">
         Back to dashboard

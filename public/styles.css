@@ -144,7 +144,10 @@ code {
   gap: 1rem;
   margin-bottom: 2rem;
 }
-.page-header p {
+.page-intro {
+  margin-bottom: 2rem;
+}
+.page-intro p {
   color: var(--muted);
   max-width: 680px;
   margin-bottom: 0;
