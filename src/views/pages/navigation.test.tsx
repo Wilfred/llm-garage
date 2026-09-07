@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Trajectory, TrajectoryStatus, Turn } from "../../store/types";
-import { createStarterRepos } from "../../store/seed";
+import { createStarterModels, createStarterRepos } from "../../store/seed";
 import { renderPage } from "../render";
 import { trajectoryDisplayStatus } from "../components";
 import { DashboardPage } from "./dashboard";
+import { ModelDetailPage, ModelsPage, NewModelPage } from "./models";
 import { NewRepoPage, RepoDetailPage, ReposPage } from "./repos";
 import {
   NewTrajectoryPage,
@@ -15,6 +16,7 @@ import { ComparisonPage, type ComparisonColumn } from "./comparisons";
 import { SpendPage } from "./spend";
 
 const repos = createStarterRepos(new Date("2026-09-06T12:00:00Z").getTime());
+const models = createStarterModels(new Date("2026-09-06T12:00:00Z").getTime());
 const trajectories: Trajectory[] = [
   trajectory(
     "trajectory-active",
@@ -48,18 +50,21 @@ const trajectories: Trajectory[] = [
 
 void test("renders the primary navigation", () => {
   const html = renderPage(
-    <DashboardPage repos={repos} trajectories={trajectories} />,
+    <DashboardPage repos={repos} trajectories={trajectories} models={models} />,
   );
 
   assert.match(html, /🛠️/u);
   assert.match(html, /href="\/repos"/);
   assert.match(html, /href="\/trajectories"/);
+  assert.match(html, /href="\/models"/);
   assert.match(html, /href="\/spend"/);
   assert.equal(html.match(/href="\/trajectories\/new"/g)?.length, 1);
 });
 
 void test("loads page styles from the shared stylesheet", () => {
-  const html = renderPage(<DashboardPage repos={[]} trajectories={[]} />);
+  const html = renderPage(
+    <DashboardPage repos={[]} trajectories={[]} models={[]} />,
+  );
 
   assert.match(html, /<link rel="stylesheet" href="\/styles\.css"\/>/);
 });
@@ -82,6 +87,51 @@ void test("renders repository links and trajectory counts", () => {
       ),
     );
   }
+});
+
+void test("lists each model with its provider and effort", () => {
+  const html = renderPage(
+    <ModelsPage models={models} trajectories={trajectories} />,
+  );
+
+  for (const model of models) {
+    assert.match(
+      html,
+      new RegExp(`href="/models/${model.id.replace("/", "%2F")}"`),
+    );
+    assert.match(html, new RegExp(model.name));
+    assert.match(html, new RegExp(model.provider));
+  }
+  assert.match(html, /<td>medium<\/td>/);
+  assert.match(html, /href="\/models\/new"/);
+});
+
+void test("offers every OpenRouter effort level when adding a model", () => {
+  const html = renderPage(<NewModelPage />);
+
+  assert.match(
+    html,
+    /<form class="card stack form-card" method="post" action="\/models">/,
+  );
+  assert.match(html, /placeholder="anthropic\/claude-opus-5"/);
+  for (const effort of ["minimal", "low", "medium", "high"])
+    assert.match(html, new RegExp(`value="${effort}"`));
+  assert.match(html, /value="medium" selected/);
+});
+
+void test("edits a model in place on its own page", () => {
+  const model = models.find(({ id }) => id === "anthropic/claude-opus-5");
+  assert.ok(model);
+  const html = renderPage(
+    <ModelDetailPage
+      model={{ ...model, effort: "high" }}
+      trajectories={trajectories.filter(({ modelId }) => modelId === model.id)}
+    />,
+  );
+
+  assert.match(html, /action="\/models\/anthropic%2Fclaude-opus-5\/delete"/);
+  assert.match(html, /value="high" selected/);
+  assert.match(html, /<h2>Trajectories<\/h2><div class="stat-value">1<\/div>/);
 });
 
 void test("renders repository creation on its own page", () => {
@@ -115,7 +165,11 @@ void test("renders repository details and trajectory counts", () => {
 
 void test("lists every trajectory on the trajectories page", () => {
   const html = renderPage(
-    <TrajectoriesPage repos={repos} trajectories={trajectories} />,
+    <TrajectoriesPage
+      repos={repos}
+      trajectories={trajectories}
+      models={models}
+    />,
   );
 
   for (const trajectory of trajectories)
@@ -132,6 +186,7 @@ void test("labels a repository-filtered trajectories page", () => {
     <TrajectoriesPage
       repos={repos}
       trajectories={visibleTrajectories}
+      models={models}
       selectedRepo={selectedRepo}
     />,
   );
@@ -146,7 +201,7 @@ void test("labels a repository-filtered trajectories page", () => {
 });
 
 void test("renders the new-trajectory form", () => {
-  const html = renderPage(<NewTrajectoryPage repos={repos} />);
+  const html = renderPage(<NewTrajectoryPage repos={repos} models={models} />);
 
   assert.match(html, /placeholder="Describe the outcome you want…"/);
   assert.match(html, /Pick several to run the same task side by side\./);
@@ -290,7 +345,11 @@ void test("maps internal trajectory states to user-facing states", () => {
 
 void test("identifies each trajectory's model and OpenRouter gateway", () => {
   const html = renderPage(
-    <TrajectoriesPage repos={repos} trajectories={trajectories} />,
+    <TrajectoriesPage
+      repos={repos}
+      trajectories={trajectories}
+      models={models}
+    />,
   );
 
   assert.match(html, /GPT-5\.6 Sol via OpenRouter/);
@@ -381,6 +440,7 @@ void test("shows each compared model's output side by side", () => {
   const html = renderPage(
     <ComparisonPage
       repo={repo}
+      models={models}
       columns={[
         comparisonColumn("compare-sol", "openai/gpt-5.6-sol", "Sol answered"),
         comparisonColumn(

@@ -1,6 +1,5 @@
 import type { ComponentChildren } from "preact";
-import type { Repo, Trajectory, TrajectoryStatus } from "../store/types";
-import { getModel } from "../models";
+import type { Model, Repo, Trajectory, TrajectoryStatus } from "../store/types";
 import { formatTokens, formatUsd, type TokenUsage } from "../usage";
 
 export function formatDate(date: Date): string {
@@ -48,9 +47,11 @@ export function EmptyState({ children }: { children: ComponentChildren }) {
 export function TrajectoryCards({
   trajectories,
   repos,
+  models,
 }: {
   trajectories: Trajectory[];
   repos: Repo[];
+  models: Model[];
 }) {
   if (trajectories.length === 0)
     return <EmptyState>No trajectories here.</EmptyState>;
@@ -60,7 +61,9 @@ export function TrajectoryCards({
         const repo = repos.find(
           (candidate) => candidate.id === trajectory.repoId,
         );
-        const model = getModel(trajectory.modelId);
+        const model = models.find(
+          (candidate) => candidate.id === trajectory.modelId,
+        );
         return (
           <a class="card card-link" href={`/trajectories/${trajectory.id}`}>
             <StatusBadge status={trajectory.status} />
@@ -69,7 +72,7 @@ export function TrajectoryCards({
               <span>
                 {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"}
               </span>
-              <span>{model.name} via OpenRouter</span>
+              <span>{model?.name ?? trajectory.modelId} via OpenRouter</span>
               <time dateTime={trajectory.updatedAt.toISOString()}>
                 {formatDate(trajectory.updatedAt)}
               </time>

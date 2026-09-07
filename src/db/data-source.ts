@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import path from "node:path";
 import { DataSource } from "typeorm";
+import { ModelEntity } from "../entities/model";
 import { RepoEntity } from "../entities/repo";
 import { RunEventEntity } from "../entities/run-event";
 import { TrajectoryEntity } from "../entities/trajectory";
@@ -15,6 +16,7 @@ export function createAppDataSource(dataDir: string): DataSource {
     database: path.join(dataDir, databaseFilename),
     entities: [
       Setting,
+      ModelEntity,
       RepoEntity,
       TrajectoryEntity,
       TurnEntity,

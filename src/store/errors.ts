@@ -4,3 +4,10 @@ export class RepoAlreadyExistsError extends Error {
     this.name = "RepoAlreadyExistsError";
   }
 }
+
+export class ModelAlreadyExistsError extends Error {
+  constructor(id: string) {
+    super(`${id} is already configured`);
+    this.name = "ModelAlreadyExistsError";
+  }
+}

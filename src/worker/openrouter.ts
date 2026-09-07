@@ -232,6 +232,7 @@ export class OpenRouterWorker implements TrajectoryWorker {
       },
       body: JSON.stringify({
         model: context.modelId,
+        reasoning: { effort: context.effort },
         messages,
         tools,
         usage: { include: true },

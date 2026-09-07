@@ -6,6 +6,7 @@ import type { DataStore } from "../store/types";
 import { NotFoundPage } from "../views/pages/trajectories";
 import { renderPage } from "../views/render";
 import { createHealthRouter } from "./routes/health";
+import { createModelsRouter } from "./routes/models";
 import { createPagesRouter } from "./routes/pages";
 import { createReposRouter } from "./routes/repos";
 import { createTrajectoriesRouter } from "./routes/trajectories";
@@ -16,6 +17,7 @@ export function createApp(dataSource: DataSource, store: DataStore): Express {
   app.use(express.static(path.resolve(__dirname, "../../public")));
   app.use(express.urlencoded({ extended: false }));
   app.use(createPagesRouter(store));
+  app.use(createModelsRouter(store));
   app.use(createReposRouter(store));
   app.use(createTrajectoriesRouter(store));
   app.use(createHealthRouter(dataSource));

@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { Mutex } from "async-mutex";
 import type { DataSource, EntityManager, Repository } from "typeorm";
+import { ModelEntity } from "../entities/model";
 import { RepoEntity } from "../entities/repo";
 import { RunEventEntity } from "../entities/run-event";
 import { TrajectoryEntity } from "../entities/trajectory";
 import { TurnEntity } from "../entities/turn";
-import { getModel, isModelId } from "../models";
 import { DisabledSandbox, type Sandbox } from "../sandbox/types";
 import { addUsage, sumUsage, type TokenUsage } from "../usage";
 import { DummyWorker } from "../worker/dummy";
@@ -14,13 +14,16 @@ import type {
   TrajectoryWorker,
   WorkerEvent,
 } from "../worker/types";
-import { RepoAlreadyExistsError } from "./errors";
-import { createStarterRepos } from "./seed";
+import { ModelAlreadyExistsError, RepoAlreadyExistsError } from "./errors";
+import { createStarterModels, createStarterRepos } from "./seed";
 import type {
+  CreateModelInput,
   CreateRepoInput,
   CreateTrajectoriesInput,
   DataStore,
+  DeleteModelResult,
   DeleteRepoResult,
+  Model,
   Repo,
   RunEvent,
   SpendGroup,
@@ -28,6 +31,7 @@ import type {
   SpendTotals,
   Trajectory,
   Turn,
+  UpdateModelInput,
 } from "./types";
 
 export type DatabaseStoreOptions = {
@@ -38,6 +42,7 @@ export type DatabaseStoreOptions = {
 };
 
 export class DatabaseDataStore implements DataStore {
+  private readonly modelRepository: Repository<ModelEntity>;
   private readonly repoRepository: Repository<RepoEntity>;
   private readonly trajectoryRepository: Repository<TrajectoryEntity>;
   private readonly turnRepository: Repository<TurnEntity>;
@@ -60,6 +65,7 @@ export class DatabaseDataStore implements DataStore {
       sandbox = new DisabledSandbox(),
     }: DatabaseStoreOptions = {},
   ) {
+    this.modelRepository = dataSource.getRepository(ModelEntity);
     this.repoRepository = dataSource.getRepository(RepoEntity);
     this.trajectoryRepository = dataSource.getRepository(TrajectoryEntity);
     this.turnRepository = dataSource.getRepository(TurnEntity);
@@ -70,9 +76,53 @@ export class DatabaseDataStore implements DataStore {
   }
 
   async initialize(): Promise<void> {
-    if (this.seed && (await this.repoRepository.count()) === 0) {
+    if (!this.seed) return;
+    if ((await this.repoRepository.count()) === 0) {
       await this.repoRepository.save(createStarterRepos());
     }
+    if ((await this.modelRepository.count()) === 0) {
+      await this.modelRepository.save(createStarterModels());
+    }
+  }
+
+  async listModels(): Promise<Model[]> {
+    return this.modelRepository.find({ order: { createdAt: "ASC" } });
+  }
+
+  async getModel(id: string): Promise<Model | undefined> {
+    return (await this.modelRepository.findOneBy({ id })) ?? undefined;
+  }
+
+  async createModel(input: CreateModelInput): Promise<Model> {
+    if (await this.modelRepository.existsBy({ id: input.id })) {
+      throw new ModelAlreadyExistsError(input.id);
+    }
+    return this.modelRepository.save(
+      this.modelRepository.create({ ...input, createdAt: new Date() }),
+    );
+  }
+
+  async updateModel(
+    id: string,
+    input: UpdateModelInput,
+  ): Promise<Model | undefined> {
+    const model = await this.modelRepository.findOneBy({ id });
+    if (!model) return undefined;
+    return this.modelRepository.save(Object.assign(model, input));
+  }
+
+  async deleteModel(id: string): Promise<DeleteModelResult> {
+    return this.transaction(async (manager) => {
+      const modelRepository = manager.getRepository(ModelEntity);
+      if (!(await modelRepository.existsBy({ id }))) return "not_found";
+      if (
+        await manager.getRepository(TrajectoryEntity).existsBy({ modelId: id })
+      ) {
+        return "in_use";
+      }
+      await modelRepository.delete({ id });
+      return "deleted";
+    });
   }
 
   async listRepos(): Promise<Repo[]> {
@@ -126,7 +176,8 @@ export class DatabaseDataStore implements DataStore {
   }
 
   async getSpend(): Promise<SpendReport> {
-    const [repos, trajectories, turns] = await Promise.all([
+    const [models, repos, trajectories, turns] = await Promise.all([
+      this.listModels(),
       this.listRepos(),
       this.listTrajectories(),
       this.turnRepository.find({
@@ -155,7 +206,9 @@ export class DatabaseDataStore implements DataStore {
       ...spendTotals(trajectories, usageByTrajectory),
       byModel: groupSpend(trajectories, usageByTrajectory, (trajectory) => ({
         id: trajectory.modelId,
-        label: getModel(trajectory.modelId).name,
+        label:
+          models.find(({ id }) => id === trajectory.modelId)?.name ??
+          trajectory.modelId,
       })),
       byRepo: groupSpend(trajectories, usageByTrajectory, (trajectory) => {
         const repo = repos.find(({ id }) => id === trajectory.repoId);
@@ -201,6 +254,10 @@ export class DatabaseDataStore implements DataStore {
       const comparisonId = input.modelIds.length > 1 ? randomUUID() : null;
       const started: Array<{ trajectory: Trajectory; turnId: string }> = [];
       for (const modelId of input.modelIds) {
+        const model = await manager
+          .getRepository(ModelEntity)
+          .findOneBy({ id: modelId });
+        if (!model) throw new Error(`Unknown model: ${modelId}`);
         const now = this.now();
         const id = randomUUID();
         const trajectory = await manager.getRepository(TrajectoryEntity).save({
@@ -231,7 +288,7 @@ export class DatabaseDataStore implements DataStore {
           trajectory.id,
           turn.id,
           "status",
-          `${getModel(modelId).name} started`,
+          `${model.name} started`,
           now,
         );
         started.push({ trajectory: toTrajectory(trajectory), turnId: turn.id });
@@ -283,6 +340,10 @@ export class DatabaseDataStore implements DataStore {
         throw new Error("This trajectory cannot accept feedback right now");
       }
 
+      const model = await manager
+        .getRepository(ModelEntity)
+        .findOneBy({ id: trajectory.modelId });
+
       const now = this.now();
       const created = await manager.getRepository(TurnEntity).save({
         id: randomUUID(),
@@ -301,7 +362,7 @@ export class DatabaseDataStore implements DataStore {
         trajectory.id,
         created.id,
         "status",
-        `${getModel(toTrajectory(trajectory).modelId).name} started`,
+        `${model?.name ?? trajectory.modelId} started`,
         now,
       );
       return toTurn(created);
@@ -402,13 +463,16 @@ export class DatabaseDataStore implements DataStore {
     try {
       const trajectory = await this.getTrajectory(trajectoryId);
       if (!trajectory) return;
+      const model = await this.getModel(trajectory.modelId);
+      if (!model) throw new Error(`Unknown model: ${trajectory.modelId}`);
       const messages = await this.conversationMessages(trajectoryId);
       await this.sandbox.create(trajectoryId);
       let workerError: unknown;
       try {
         await this.worker.run({
-          modelId: trajectory.modelId,
-          modelName: getModel(trajectory.modelId).name,
+          modelId: model.id,
+          modelName: model.name,
+          effort: model.effort,
           messages,
           signal: controller.signal,
           runCommand: (command) =>
@@ -653,11 +717,6 @@ export class DatabaseDataStore implements DataStore {
 }
 
 function toTrajectory(entity: TrajectoryEntity): Trajectory {
-  if (!isModelId(entity.modelId)) {
-    throw new Error(
-      `Trajectory ${entity.id} has unknown model ${entity.modelId}`,
-    );
-  }
   return {
     id: entity.id,
     ...(entity.parentId === null ? {} : { parentId: entity.parentId }),
