@@ -6,7 +6,8 @@ import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import type { DataSource } from "typeorm";
 import { createAppDataSource } from "../db/data-source";
-import { RepoAlreadyExistsError } from "./errors";
+import { ModelAlreadyExistsError, RepoAlreadyExistsError } from "./errors";
+import { createStarterModels } from "./seed";
 import { DatabaseDataStore } from "./db";
 import type {
   CreateTrajectoriesInput,
@@ -31,6 +32,7 @@ void test("persists repository CRUD across data source restarts", async (t) => {
   await dataSource.initialize();
   let store = new DatabaseDataStore(dataSource);
   await store.initialize();
+  await seedModels(store);
 
   assert.equal((await store.listRepos()).length, 3);
   const created = await store.createRepo({
@@ -45,6 +47,7 @@ void test("persists repository CRUD across data source restarts", async (t) => {
   await dataSource.initialize();
   store = new DatabaseDataStore(dataSource);
   await store.initialize();
+  await seedModels(store);
 
   assert.deepEqual(await store.getRepo(created.id), created);
   assert.equal((await store.listRepos()).length, 4);
@@ -55,6 +58,7 @@ void test("persists repository CRUD across data source restarts", async (t) => {
   await dataSource.initialize();
   store = new DatabaseDataStore(dataSource);
   await store.initialize();
+  await seedModels(store);
 
   assert.equal((await store.getRepo(created.id))?.autoMerge, true);
   assert.equal(await store.deleteRepo(created.id), "deleted");
@@ -64,9 +68,84 @@ void test("persists repository CRUD across data source restarts", async (t) => {
   await dataSource.initialize();
   store = new DatabaseDataStore(dataSource);
   await store.initialize();
+  await seedModels(store);
 
   assert.equal(await store.getRepo(created.id), undefined);
   assert.equal((await store.listRepos()).length, 3);
+});
+
+void test("persists model CRUD and keeps models used by trajectories", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-models-"));
+  let dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  let store = new DatabaseDataStore(dataSource, { simulationStepMs: 5 });
+  await store.initialize();
+
+  assert.equal((await store.listModels()).length, createStarterModels().length);
+  const created = await store.createModel({
+    id: "deepseek/deepseek-r2",
+    name: "DeepSeek R2",
+    provider: "DeepSeek",
+    effort: "high",
+  });
+  await assert.rejects(
+    store.createModel({
+      id: created.id,
+      name: "Duplicate",
+      provider: "DeepSeek",
+      effort: "low",
+    }),
+    ModelAlreadyExistsError,
+  );
+
+  await dataSource.destroy();
+  dataSource = createAppDataSource(dataDir);
+  await dataSource.initialize();
+  store = new DatabaseDataStore(dataSource, { simulationStepMs: 5 });
+  await store.initialize();
+
+  assert.deepEqual(await store.getModel(created.id), created);
+  const updated = await store.updateModel(created.id, {
+    name: "DeepSeek R2 Turbo",
+    provider: "DeepSeek",
+    effort: "low",
+  });
+  assert.ok(updated);
+  assert.equal(updated.name, "DeepSeek R2 Turbo");
+  assert.equal(updated.effort, "low");
+  assert.deepEqual(await store.getModel(created.id), updated);
+  assert.equal(
+    await store.updateModel("nobody/nothing", {
+      name: "Nothing",
+      provider: "Nobody",
+      effort: "low",
+    }),
+    undefined,
+  );
+
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "model-project",
+    defaultBranch: "main",
+    autoMerge: false,
+  });
+  const trajectory = await createOne(store, {
+    repoId: repo.id,
+    title: "Use the model",
+    modelIds: [created.id],
+    taskPrompt: "Say hello",
+  });
+  await waitForStatus(store, trajectory.id, "succeeded");
+
+  assert.equal(await store.deleteModel(created.id), "in_use");
+  assert.equal(await store.deleteModel("nobody/nothing"), "not_found");
+  assert.equal(await store.deleteModel("z-ai/glm-5.2"), "deleted");
+  assert.equal(await store.getModel("z-ai/glm-5.2"), undefined);
 });
 
 void test("persists trajectories, turns, and ordered events across restarts", async (t) => {
@@ -84,6 +163,7 @@ void test("persists trajectories, turns, and ordered events across restarts", as
     simulationStepMs: 5,
   });
   await store.initialize();
+  await seedModels(store);
 
   const repo = await store.createRepo({
     owner: "example",
@@ -135,6 +215,7 @@ void test("persists trajectories, turns, and ordered events across restarts", as
   await dataSource.initialize();
   const restartedStore = new DatabaseDataStore(dataSource, { seed: false });
   await restartedStore.initialize();
+  await seedModels(restartedStore);
 
   assert.equal(
     (await restartedStore.getTrajectory(trajectory.id))?.status,
@@ -167,6 +248,7 @@ void test("commits cancellation state and its event together", async (t) => {
     simulationStepMs: 100,
   });
   await store.initialize();
+  await seedModels(store);
 
   const repo = await store.createRepo({
     owner: "example",
@@ -215,6 +297,7 @@ void test("sends persisted conversation history to each worker turn", async (t) 
       },
     },
   });
+  await seedModels(store);
   const repo = await store.createRepo({
     owner: "example",
     name: "conversation-project",
@@ -262,6 +345,7 @@ void test("runs one trajectory per selected model in a comparison", async (t) =>
     },
   });
   await store.initialize();
+  await seedModels(store);
 
   const repo = await store.createRepo({
     owner: "example",
@@ -327,6 +411,7 @@ void test("leaves a single-model trajectory out of any comparison", async (t) =>
     worker: { run: async () => undefined },
   });
   await store.initialize();
+  await seedModels(store);
 
   const repo = await store.createRepo({
     owner: "example",
@@ -368,6 +453,7 @@ void test("rejects invalid trajectory relationships without partial records", as
     worker: { run: async () => undefined },
   });
   await store.initialize();
+  await seedModels(store);
 
   await assert.rejects(
     createOne(store, {
@@ -434,6 +520,7 @@ void test("persists worker failures and their terminal events", async (t) => {
       },
     },
   });
+  await seedModels(store);
   const repo = await store.createRepo({
     owner: "example",
     name: "failure-project",
@@ -503,6 +590,7 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
       },
     },
   });
+  await seedModels(store);
   const repo = await store.createRepo({
     owner: "example",
     name: "sandbox-project",
@@ -551,6 +639,7 @@ void test("aggregates recorded usage into a spend report", async (t) => {
     },
   });
   await store.initialize();
+  await seedModels(store);
 
   const repo = await store.createRepo({
     owner: "example",
@@ -632,4 +721,10 @@ async function createOne(
   const [trajectory] = await store.createTrajectories(input);
   assert.ok(trajectory);
   return trajectory;
+}
+
+async function seedModels(store: DataStore): Promise<void> {
+  for (const { createdAt: _createdAt, ...input } of createStarterModels()) {
+    if (!(await store.getModel(input.id))) await store.createModel(input);
+  }
 }

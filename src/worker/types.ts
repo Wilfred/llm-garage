@@ -1,4 +1,4 @@
-import type { ModelId } from "../models";
+import type { ModelEffort } from "../models";
 import type { CommandResult } from "../sandbox/types";
 import type { TokenUsage } from "../usage";
 
@@ -12,8 +12,9 @@ export type ConversationMessage = {
 };
 
 export type WorkerContext = {
-  modelId: ModelId;
+  modelId: string;
   modelName: string;
+  effort: ModelEffort;
   messages: ConversationMessage[];
   signal: AbortSignal;
   emit: (event: WorkerEvent) => void;

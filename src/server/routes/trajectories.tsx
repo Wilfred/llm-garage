@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { isModelId } from "../../models";
 import type { DataStore, Repo, Trajectory } from "../../store/types";
 import {
   NewTrajectoryPage,
@@ -16,9 +15,10 @@ export function createTrajectoriesRouter(store: DataStore): Router {
   const router = Router();
 
   router.get("/trajectories", async (req, res) => {
-    const [repos, trajectories] = await Promise.all([
+    const [repos, trajectories, models] = await Promise.all([
       store.listRepos(),
       store.listTrajectories(),
+      store.listModels(),
     ]);
     const repoId = queryString(req.query["repoId"]);
     const { selectedRepo, visibleTrajectories } = filterTrajectoriesByRepo(
@@ -33,6 +33,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
           <TrajectoriesPage
             repos={repos}
             trajectories={visibleTrajectories}
+            models={models}
             {...(selectedRepo === undefined ? {} : { selectedRepo })}
           />,
         ),
@@ -40,7 +41,10 @@ export function createTrajectoriesRouter(store: DataStore): Router {
   });
 
   router.get("/trajectories/new", async (req, res) => {
-    const repos = await store.listRepos();
+    const [repos, models] = await Promise.all([
+      store.listRepos(),
+      store.listModels(),
+    ]);
     const selectedRepoId = queryString(req.query["repoId"]);
     res
       .type("html")
@@ -48,6 +52,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         renderPage(
           <NewTrajectoryPage
             repos={repos}
+            models={models}
             {...(selectedRepoId === undefined ? {} : { selectedRepoId })}
           />,
         ),
@@ -58,11 +63,12 @@ export function createTrajectoriesRouter(store: DataStore): Router {
     const repoId = formField(req.body, "repoId");
     const taskPrompt = formField(req.body, "taskPrompt");
     const modelIds = formFields(req.body, "modelIds");
+    const models = await store.listModels();
     if (
       !repoId ||
       !taskPrompt ||
       modelIds.length === 0 ||
-      !modelIds.every(isModelId)
+      !modelIds.every((modelId) => models.some(({ id }) => id === modelId))
     ) {
       const repos = await store.listRepos();
       res
@@ -72,6 +78,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
           renderPage(
             <NewTrajectoryPage
               repos={repos}
+              models={models}
               selectedRepoId={repoId}
               selectedModelIds={modelIds}
               error="Repository, at least one model, and task are required."
@@ -109,8 +116,9 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         );
       return;
     }
-    const [repo, columns] = await Promise.all([
+    const [repo, models, columns] = await Promise.all([
       store.getRepo(first.repoId),
+      store.listModels(),
       Promise.all(
         trajectories.map(async (trajectory) => ({
           trajectory,
@@ -124,6 +132,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         renderPage(
           <ComparisonPage
             columns={columns}
+            models={models}
             {...(repo === undefined ? {} : { repo })}
           />,
         ),

@@ -31,7 +31,9 @@ void test("renders build and runtime information", () => {
 });
 
 void test("links to the about page from the footer", () => {
-  const html = renderPage(<DashboardPage repos={[]} trajectories={[]} />);
+  const html = renderPage(
+    <DashboardPage repos={[]} trajectories={[]} models={[]} />,
+  );
 
   assert.match(html, /<footer><a href="\/about">About<\/a>/);
 });

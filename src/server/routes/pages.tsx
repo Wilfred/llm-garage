@@ -12,14 +12,21 @@ export function createPagesRouter(store: DataStore): Router {
   const buildInfo = loadBuildInfo();
 
   router.get("/", async (_req, res) => {
-    const [repos, trajectories] = await Promise.all([
+    const [repos, trajectories, models] = await Promise.all([
       store.listRepos(),
       store.listTrajectories(),
+      store.listModels(),
     ]);
     res
       .type("html")
       .send(
-        renderPage(<DashboardPage repos={repos} trajectories={trajectories} />),
+        renderPage(
+          <DashboardPage
+            repos={repos}
+            trajectories={trajectories}
+            models={models}
+          />,
+        ),
       );
   });
 

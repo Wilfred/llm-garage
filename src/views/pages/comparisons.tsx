@@ -1,5 +1,4 @@
-import type { Repo, Trajectory } from "../../store/types";
-import { getModel } from "../../models";
+import type { Model, Repo, Trajectory } from "../../store/types";
 import { sumUsage } from "../../usage";
 import { StatusBadge, UsageSummary } from "../components";
 import { Layout } from "../layout";
@@ -13,9 +12,11 @@ export type ComparisonColumn = {
 
 export function ComparisonPage({
   columns,
+  models,
   repo,
 }: {
   columns: ComparisonColumn[];
+  models: Model[];
   repo?: Repo;
 }) {
   const first = columns[0];
@@ -47,7 +48,8 @@ export function ComparisonPage({
           <section class="card compare-column">
             <div class="compare-heading">
               <a href={`/trajectories/${trajectory.id}`}>
-                {getModel(trajectory.modelId).name}
+                {models.find(({ id }) => id === trajectory.modelId)?.name ??
+                  trajectory.modelId}
               </a>
               <StatusBadge status={trajectory.status} />
             </div>

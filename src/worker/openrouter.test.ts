@@ -28,6 +28,7 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
   await worker.run({
     modelId: "anthropic/claude-opus-5",
     modelName: "Claude Opus 5",
+    effort: "medium",
     messages: [
       { role: "user", content: "First question" },
       { role: "assistant", content: "First answer" },
@@ -69,6 +70,9 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
     ),
     ["run_command", "fetch_url", "search_web"],
   );
+  assert.deepEqual((body as { reasoning: unknown }).reasoning, {
+    effort: "medium",
+  });
   assert.deepEqual((body as { usage: unknown }).usage, { include: true });
   assert.deepEqual(events, [
     { kind: "model_output", data: "A useful answer" },
@@ -150,6 +154,7 @@ void test("fetches URLs and searches Brave when requested by the model", async (
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "GPT-5.6 Sol",
+    effort: "medium",
     messages: [{ role: "user", content: "Research example.com" }],
     signal: new AbortController().signal,
     emit: (event) => events.push(event),
@@ -223,6 +228,7 @@ void test("runs model-requested shell commands and returns their output", async 
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "GPT-5.6 Sol",
+    effort: "medium",
     messages: [{ role: "user", content: "List the container root" }],
     signal: new AbortController().signal,
     runCommand: async (command) => {
@@ -273,6 +279,7 @@ void test("reports OpenRouter API errors", async () => {
     worker.run({
       modelId: "openai/gpt-5.6-sol",
       modelName: "GPT-5.6 Sol",
+      effort: "medium",
       messages: [{ role: "user", content: "Hello" }],
       signal: new AbortController().signal,
       emit: () => undefined,
@@ -295,6 +302,7 @@ void test("requires an API key before making a request", async () => {
     worker.run({
       modelId: "openai/gpt-5.6-sol",
       modelName: "GPT-5.6 Sol",
+      effort: "medium",
       messages: [{ role: "user", content: "Hello" }],
       signal: new AbortController().signal,
       emit: () => undefined,

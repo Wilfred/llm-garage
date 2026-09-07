@@ -1,5 +1,10 @@
-import type { Repo, RunEvent, Trajectory, Turn } from "../../store/types";
-import { modelCatalog } from "../../models";
+import type {
+  Model,
+  Repo,
+  RunEvent,
+  Trajectory,
+  Turn,
+} from "../../store/types";
 import { sumUsage } from "../../usage";
 import { TrajectoryCards, StatusBadge, UsageSummary } from "../components";
 import { Layout } from "../layout";
@@ -7,15 +12,20 @@ import { renderMarkdown } from "../markdown";
 
 export function NewTrajectoryPage({
   repos,
+  models,
   selectedRepoId,
-  selectedModelIds = [modelCatalog[0].id],
+  selectedModelIds,
   error,
 }: {
   repos: Repo[];
+  models: Model[];
   selectedRepoId?: string;
   selectedModelIds?: string[];
   error?: string;
 }) {
+  const firstModel = models[0];
+  const checkedModelIds =
+    selectedModelIds ?? (firstModel ? [firstModel.id] : []);
   return (
     <Layout title="New trajectory" section="trajectories">
       <div class="page-intro">
@@ -26,10 +36,19 @@ export function NewTrajectoryPage({
         </p>
       </div>
       {error && <div class="notice">{error}</div>}
-      {repos.length === 0 ? (
+      {repos.length === 0 || models.length === 0 ? (
         <div class="empty">
-          Add a repository before starting a trajectory.{" "}
-          <a href="/repos">Go to repositories</a>.
+          {repos.length === 0 ? (
+            <>
+              Add a repository before starting a trajectory.{" "}
+              <a href="/repos">Go to repositories</a>.
+            </>
+          ) : (
+            <>
+              Add a model before starting a trajectory.{" "}
+              <a href="/models">Go to models</a>.
+            </>
+          )}
         </div>
       ) : (
         <form class="card stack form-card" method="post" action="/trajectories">
@@ -41,15 +60,15 @@ export function NewTrajectoryPage({
             ))}
           </select>
           <div class="check-row" role="group" aria-label="Models">
-            {modelCatalog.map((model) => (
+            {models.map((model) => (
               <label class="check">
                 <input
                   type="checkbox"
                   name="modelIds"
                   value={model.id}
-                  checked={selectedModelIds.includes(model.id)}
+                  checked={checkedModelIds.includes(model.id)}
                 />
-                {model.name} · {model.provider}
+                {model.name} · {model.provider} · {model.effort} effort
               </label>
             ))}
           </div>
@@ -202,10 +221,12 @@ function TurnCard({ turn, events }: TurnTranscript) {
 export function TrajectoriesPage({
   repos,
   trajectories,
+  models,
   selectedRepo,
 }: {
   repos: Repo[];
   trajectories: Trajectory[];
+  models: Model[];
   selectedRepo?: Repo;
 }) {
   return (
@@ -222,7 +243,11 @@ export function TrajectoriesPage({
           </p>
         )}
       </div>
-      <TrajectoryCards trajectories={trajectories} repos={repos} />
+      <TrajectoryCards
+        trajectories={trajectories}
+        repos={repos}
+        models={models}
+      />
     </Layout>
   );
 }

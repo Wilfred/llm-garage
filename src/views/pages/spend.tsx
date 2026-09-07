@@ -6,11 +6,9 @@ import { Layout } from "../layout";
 export function SpendPage({ spend }: { spend: SpendReport }) {
   return (
     <Layout title="Spend" section="spend">
-      <div class="page-header">
-        <div>
-          <h1>Spend</h1>
-          <p>Token usage and cost as reported by OpenRouter.</p>
-        </div>
+      <div class="page-intro">
+        <h1>Spend</h1>
+        <p>Token usage and cost as reported by OpenRouter.</p>
       </div>
       {spend.trajectories === 0 ? (
         <EmptyState>

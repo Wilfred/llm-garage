@@ -65,8 +65,8 @@ The target feature set is:
 Milestones M1-M4 are complete. The repository currently provides:
 
 - an Express 5 application rendered with Preact and JSX;
-- dashboard, repository, trajectory, about, and new-trajectory screens;
-- repository and trajectory catalogues persisted in SQLite;
+- dashboard, repository, model, trajectory, about, and new-trajectory screens;
+- model, repository, and trajectory catalogues persisted in SQLite;
 - durable turns and ordered trajectory events used by the clickable prototype;
 - tool-free, multi-turn model conversations through OpenRouter;
 - linting, unit and route tests, a production build, and a web-app Docker image.
