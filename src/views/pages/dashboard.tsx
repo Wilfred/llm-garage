@@ -24,11 +24,7 @@ export function DashboardPage({
 
   return (
     <Layout title="Dashboard">
-      <div class="page-header">
-        <div>
-          <h1>Dashboard</h1>
-        </div>
-      </div>
+      <h1 class="page-intro">Dashboard</h1>
       <section class="dashboard-section">
         <div class="section-heading">
           <h2>Active</h2>
