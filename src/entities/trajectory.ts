@@ -14,6 +14,7 @@ import { trajectoryStatuses, type TrajectoryStatus } from "../store/types";
 @Index(["repoId", "updatedAt"])
 @Index(["parentId"])
 @Index(["rootId"])
+@Index(["comparisonId"])
 export class TrajectoryEntity {
   @PrimaryColumn("text")
   id!: string;
@@ -31,6 +32,9 @@ export class TrajectoryEntity {
   @ManyToOne(() => TrajectoryEntity, { onDelete: "RESTRICT" })
   @JoinColumn({ name: "rootId" })
   root?: TrajectoryEntity;
+
+  @Column("text", { nullable: true })
+  comparisonId!: string | null;
 
   @Column("text")
   repoId!: string;

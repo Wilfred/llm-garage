@@ -11,6 +11,7 @@ import {
   TrajectoryDetailPage,
   TrajectoriesPage,
 } from "./trajectories";
+import { ComparisonPage, type ComparisonColumn } from "./comparisons";
 
 const repos = createStarterRepos(new Date("2026-09-06T12:00:00Z").getTime());
 const trajectories: Trajectory[] = [
@@ -146,8 +147,9 @@ void test("renders the new-trajectory form", () => {
   const html = renderPage(<NewTrajectoryPage repos={repos} />);
 
   assert.match(html, /placeholder="Describe the outcome you want…"/);
-  assert.match(html, /Talk to a model through OpenRouter\./);
+  assert.match(html, /Pick several to run the same task side by side\./);
   assert.match(html, />Start trajectory<\/button>/);
+  assert.equal(html.match(/name="modelIds"/g)?.length, 4);
   assert.match(html, /value="openai\/gpt-5\.6-sol"/);
   assert.match(html, /value="anthropic\/claude-opus-5"/);
   assert.match(html, /value="moonshotai\/kimi-k3"/);
@@ -271,6 +273,85 @@ void test("renders model output as markdown without raw HTML", () => {
   assert.doesNotMatch(html, /<script>alert/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
 });
+
+void test("shows each compared model's output side by side", () => {
+  const [repo] = repos;
+  assert.ok(repo);
+  const html = renderPage(
+    <ComparisonPage
+      repo={repo}
+      columns={[
+        comparisonColumn("compare-sol", "openai/gpt-5.6-sol", "Sol answered"),
+        comparisonColumn(
+          "compare-opus",
+          "anthropic/claude-opus-5",
+          "Opus answered",
+        ),
+      ]}
+    />,
+  );
+
+  assert.match(html, /2 models on the same task/);
+  assert.match(html, /GPT-5\.6 Sol/);
+  assert.match(html, /Claude Opus 5/);
+  assert.match(html, /Sol answered/);
+  assert.match(html, /Opus answered/);
+  assert.match(html, /href="\/trajectories\/compare-sol"/);
+  assert.match(html, /href="\/trajectories\/compare-opus"/);
+});
+
+void test("links a compared trajectory back to its comparison", () => {
+  const column = comparisonColumn(
+    "compare-sol",
+    "openai/gpt-5.6-sol",
+    "Sol answered",
+  );
+  const html = renderPage(
+    <TrajectoryDetailPage
+      trajectory={column.trajectory}
+      transcript={column.transcript}
+    />,
+  );
+
+  assert.match(html, /href="\/comparisons\/comparison-1">Comparison<\/a>/);
+});
+
+function comparisonColumn(
+  id: string,
+  modelId: Trajectory["modelId"],
+  output: string,
+): ComparisonColumn {
+  const compared: Trajectory = {
+    ...trajectory(
+      id,
+      "Compare the models",
+      "repo-garage",
+      "succeeded",
+      modelId,
+    ),
+    comparisonId: "comparison-1",
+  };
+  const turn = turnFor(compared);
+  return {
+    trajectory: compared,
+    transcript: [
+      {
+        turn,
+        events: [
+          {
+            id: `event-${id}`,
+            trajectoryId: compared.id,
+            turnId: turn.id,
+            sequence: 1,
+            kind: "model_output",
+            data: output,
+            ts: compared.updatedAt,
+          },
+        ],
+      },
+    ],
+  };
+}
 
 function trajectory(
   id: string,
