@@ -1,7 +1,13 @@
 import { PassThrough } from "node:stream";
 import { finished } from "node:stream/promises";
 import Docker from "dockerode";
-import type { CommandResult, Sandbox } from "./types";
+import type {
+  CommandResult,
+  ContainerManager,
+  ManagedContainer,
+  RemoveContainersOptions,
+  Sandbox,
+} from "./types";
 
 const managedLabel = "com.llm-garage.managed";
 const trajectoryLabel = "com.llm-garage.trajectory-id";
@@ -16,7 +22,7 @@ export type DockerSandboxOptions = {
   outputLimitBytes?: number;
 };
 
-export class DockerSandbox implements Sandbox {
+export class DockerSandbox implements Sandbox, ContainerManager {
   private readonly docker: Docker;
   private readonly image: string;
   private readonly memoryBytes: number;
@@ -173,6 +179,55 @@ export class DockerSandbox implements Sandbox {
     } catch (error) {
       if (!isNotFound(error)) throw error;
     }
+  }
+
+  async listContainers(): Promise<ManagedContainer[]> {
+    const containers = await this.listManagedContainers();
+    return containers.map((container) => {
+      const trajectoryId = container.Labels[trajectoryLabel];
+      const name = container.Names[0]?.replace(/^\/+/, "") ?? container.Id;
+      return {
+        id: container.Id,
+        name,
+        ...(trajectoryId === undefined ? {} : { trajectoryId }),
+        image: container.Image,
+        state: container.State,
+        status: container.Status,
+        createdAt: new Date(container.Created * 1000),
+      };
+    });
+  }
+
+  async removeContainers({
+    keepTrajectoryIds = new Set<string>(),
+  }: RemoveContainersOptions = {}): Promise<number> {
+    await Promise.allSettled(this.creates.values());
+    const containers = await this.listManagedContainers();
+    const candidates = containers.filter((container) => {
+      const trajectoryId = container.Labels[trajectoryLabel];
+      return trajectoryId === undefined || !keepTrajectoryIds.has(trajectoryId);
+    });
+    const removed = await Promise.all(
+      candidates.map(async (container) => {
+        try {
+          await this.docker
+            .getContainer(container.Id)
+            .remove({ force: true, v: true });
+          return 1;
+        } catch (error) {
+          if (isNotFound(error)) return 0;
+          throw error;
+        }
+      }),
+    );
+    return removed.reduce<number>((total, count) => total + count, 0);
+  }
+
+  private listManagedContainers(): Promise<Docker.ContainerInfo[]> {
+    return this.docker.listContainers({
+      all: true,
+      filters: { label: [`${managedLabel}=true`] },
+    });
   }
 
   private async ensureImage(): Promise<void> {

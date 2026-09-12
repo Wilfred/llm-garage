@@ -5,6 +5,25 @@ export type CommandResult = {
   truncated: boolean;
 };
 
+export type ManagedContainer = {
+  id: string;
+  name: string;
+  trajectoryId?: string;
+  image: string;
+  state: string;
+  status: string;
+  createdAt: Date;
+};
+
+export type RemoveContainersOptions = {
+  keepTrajectoryIds?: ReadonlySet<string>;
+};
+
+export interface ContainerManager {
+  listContainers(): Promise<ManagedContainer[]>;
+  removeContainers(options?: RemoveContainersOptions): Promise<number>;
+}
+
 export interface Sandbox {
   create(trajectoryId: string): Promise<void>;
   runCommand(
@@ -27,4 +46,14 @@ export class DisabledSandbox implements Sandbox {
   }
 
   async archive(_trajectoryId: string): Promise<void> {}
+}
+
+export class DisabledContainerManager implements ContainerManager {
+  async listContainers(): Promise<ManagedContainer[]> {
+    return [];
+  }
+
+  async removeContainers(_options?: RemoveContainersOptions): Promise<number> {
+    return 0;
+  }
 }

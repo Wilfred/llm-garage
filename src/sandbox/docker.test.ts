@@ -89,6 +89,95 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.equal(removed, true);
 });
 
+void test("lists and removes only managed containers that are not kept", async () => {
+  const removed: string[] = [];
+  let listOptions: Docker.ContainerListOptions | undefined;
+  const managedContainers = [
+    {
+      Id: "active-container-id",
+      Names: ["/llm-garage-trajectory-active"],
+      Image: "worker:test",
+      ImageID: "image-id",
+      Command: "/bin/sh",
+      Created: 1_788_777_600,
+      Ports: [],
+      Labels: {
+        "com.llm-garage.managed": "true",
+        "com.llm-garage.trajectory-id": "active",
+      },
+      State: "running",
+      Status: "Up 2 minutes",
+      HostConfig: { NetworkMode: "none" },
+      NetworkSettings: { Networks: {} },
+      Mounts: [],
+    },
+    {
+      Id: "idle-container-id",
+      Names: ["/llm-garage-trajectory-idle"],
+      Image: "worker:test",
+      ImageID: "image-id",
+      Command: "/bin/sh",
+      Created: 1_788_777_000,
+      Ports: [],
+      Labels: {
+        "com.llm-garage.managed": "true",
+        "com.llm-garage.trajectory-id": "idle",
+      },
+      State: "exited",
+      Status: "Exited (0) 10 minutes ago",
+      HostConfig: { NetworkMode: "none" },
+      NetworkSettings: { Networks: {} },
+      Mounts: [],
+    },
+  ] satisfies Docker.ContainerInfo[];
+  const docker = {
+    listContainers: async (options: Docker.ContainerListOptions) => {
+      listOptions = options;
+      return managedContainers;
+    },
+    getContainer: (id: string) => ({
+      remove: async () => {
+        removed.push(id);
+      },
+    }),
+  } as unknown as Docker;
+  const sandbox = new DockerSandbox({ docker });
+
+  const listed = await sandbox.listContainers();
+
+  assert.deepEqual(listOptions, {
+    all: true,
+    filters: { label: ["com.llm-garage.managed=true"] },
+  });
+  assert.deepEqual(listed, [
+    {
+      id: "active-container-id",
+      name: "llm-garage-trajectory-active",
+      trajectoryId: "active",
+      image: "worker:test",
+      state: "running",
+      status: "Up 2 minutes",
+      createdAt: new Date("2026-09-07T10:40:00.000Z"),
+    },
+    {
+      id: "idle-container-id",
+      name: "llm-garage-trajectory-idle",
+      trajectoryId: "idle",
+      image: "worker:test",
+      state: "exited",
+      status: "Exited (0) 10 minutes ago",
+      createdAt: new Date("2026-09-07T10:30:00.000Z"),
+    },
+  ]);
+
+  const count = await sandbox.removeContainers({
+    keepTrajectoryIds: new Set(["active"]),
+  });
+
+  assert.equal(count, 1);
+  assert.deepEqual(removed, ["idle-container-id"]);
+});
+
 void test(
   "creates an isolated container, runs a command, and removes it",
   { skip: !dockerIntegration },
