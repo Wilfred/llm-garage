@@ -8,7 +8,7 @@ const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().trim().min(1).optional(),
   BRAVE_SEARCH_API_KEY: z.string().trim().min(1).optional(),
   DOCKER_SOCKET: z.string().min(1).default("/var/run/docker.sock"),
-  WORKER_IMAGE: z.string().min(1).default("alpine:3.22.5"),
+  WORKER_IMAGE: z.string().min(1).default("node:22-bookworm"),
 });
 
 export const config = envSchema.parse(process.env);

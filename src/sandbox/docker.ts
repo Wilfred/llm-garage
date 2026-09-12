@@ -1,10 +1,12 @@
 import { PassThrough } from "node:stream";
 import { finished } from "node:stream/promises";
 import Docker from "dockerode";
-import type { CommandResult, Sandbox } from "./types";
+import type { CommandResult, Sandbox, SandboxRepository } from "./types";
 
 const managedLabel = "com.llm-garage.managed";
 const trajectoryLabel = "com.llm-garage.trajectory-id";
+const repositoryLabel = "com.llm-garage.repository";
+const branchLabel = "com.llm-garage.default-branch";
 const defaultOutputLimit = 64 * 1024;
 
 export type DockerSandboxOptions = {
@@ -28,7 +30,7 @@ export class DockerSandbox implements Sandbox {
 
   constructor({
     docker = new Docker(),
-    image = "alpine:3.22.5",
+    image = "node:22-bookworm",
     memoryBytes = 512 * 1024 * 1024,
     nanoCpus = 1_000_000_000,
     pidsLimit = 128,
@@ -42,7 +44,10 @@ export class DockerSandbox implements Sandbox {
     this.outputLimitBytes = outputLimitBytes;
   }
 
-  async create(trajectoryId: string): Promise<void> {
+  async create(
+    trajectoryId: string,
+    repository: SandboxRepository,
+  ): Promise<void> {
     validateTrajectoryId(trajectoryId);
     const pending = this.creates.get(trajectoryId);
     if (pending) {
@@ -50,7 +55,7 @@ export class DockerSandbox implements Sandbox {
       return;
     }
 
-    const creation = this.createContainer(trajectoryId);
+    const creation = this.createContainer(trajectoryId, repository);
     this.creates.set(trajectoryId, creation);
     try {
       await creation;
@@ -61,15 +66,28 @@ export class DockerSandbox implements Sandbox {
     }
   }
 
-  private async createContainer(trajectoryId: string): Promise<void> {
+  private async createContainer(
+    trajectoryId: string,
+    repository: SandboxRepository,
+  ): Promise<void> {
     const existing = this.docker.getContainer(containerName(trajectoryId));
+    let details: Docker.ContainerInspectInfo | undefined;
     try {
-      const details = await existing.inspect();
-      if (!details.State.Running) await existing.start();
-      return;
+      details = await existing.inspect();
     } catch (error) {
       if (!isNotFound(error)) throw error;
     }
+
+    if (
+      details?.State.Running &&
+      matchesRepository(details.Config.Labels, repository)
+    ) {
+      if (details.NetworkSettings.Networks["bridge"]) {
+        await this.disconnectNetwork(trajectoryId);
+      }
+      return;
+    }
+    if (details) await existing.remove({ force: true, v: true });
 
     await this.ensureImage();
     const container = await this.docker.createContainer({
@@ -85,13 +103,15 @@ export class DockerSandbox implements Sandbox {
       Labels: {
         [managedLabel]: "true",
         [trajectoryLabel]: trajectoryId,
+        [repositoryLabel]: `${repository.owner}/${repository.name}`,
+        [branchLabel]: repository.defaultBranch,
       },
       HostConfig: {
         AutoRemove: false,
         CapDrop: ["ALL"],
         Memory: this.memoryBytes,
         NanoCpus: this.nanoCpus,
-        NetworkMode: "none",
+        NetworkMode: "bridge",
         PidsLimit: this.pidsLimit,
         ReadonlyRootfs: true,
         SecurityOpt: ["no-new-privileges:true"],
@@ -102,7 +122,64 @@ export class DockerSandbox implements Sandbox {
         },
       },
     });
-    await container.start();
+    try {
+      await container.start();
+      await this.cloneRepository(container, repository);
+      await this.disconnectNetwork(trajectoryId);
+    } catch (error) {
+      await container.remove({ force: true, v: true }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  private async disconnectNetwork(trajectoryId: string): Promise<void> {
+    await this.docker.getNetwork("bridge").disconnect({
+      Container: containerName(trajectoryId),
+      Force: true,
+    });
+  }
+
+  private async cloneRepository(
+    container: Docker.Container,
+    repository: SandboxRepository,
+  ): Promise<void> {
+    const execution = await container.exec({
+      Cmd: [
+        "git",
+        "clone",
+        "--branch",
+        repository.defaultBranch,
+        "--single-branch",
+        "--",
+        `https://github.com/${repository.owner}/${repository.name}.git`,
+        "/workspace",
+      ],
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      User: "65534:65534",
+      WorkingDir: "/workspace",
+    });
+    const stream = await execution.start({ hijack: true, stdin: false });
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const stdoutCapture = capture(stdout, this.outputLimitBytes);
+    const stderrCapture = capture(stderr, this.outputLimitBytes);
+    this.docker.modem.demuxStream(stream, stdout, stderr);
+    await finished(stream);
+    stdout.end();
+    stderr.end();
+    const [inspection, out, err] = await Promise.all([
+      execution.inspect(),
+      stdoutCapture,
+      stderrCapture,
+    ]);
+    if (inspection.ExitCode !== 0) {
+      const detail = err.text.trim() || out.text.trim();
+      throw new Error(
+        `Failed to clone ${repository.owner}/${repository.name}${detail ? `: ${detail}` : ""}`,
+      );
+    }
   }
 
   async runCommand(
@@ -203,6 +280,16 @@ export class DockerSandbox implements Sandbox {
 
 export function containerName(trajectoryId: string): string {
   return `llm-garage-trajectory-${trajectoryId}`;
+}
+
+function matchesRepository(
+  labels: Record<string, string> | undefined,
+  repository: SandboxRepository,
+): boolean {
+  return (
+    labels?.[repositoryLabel] === `${repository.owner}/${repository.name}` &&
+    labels[branchLabel] === repository.defaultBranch
+  );
 }
 
 function validateTrajectoryId(trajectoryId: string): void {
