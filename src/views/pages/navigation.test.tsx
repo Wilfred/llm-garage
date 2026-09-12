@@ -13,6 +13,7 @@ import {
   TrajectoriesPage,
 } from "./trajectories";
 import { ComparisonPage, type ComparisonColumn } from "./comparisons";
+import { ContainersPage } from "./containers";
 import { SpendPage } from "./spend";
 
 const repos = createStarterRepos(new Date("2026-09-06T12:00:00Z").getTime());
@@ -56,9 +57,46 @@ void test("renders the primary navigation", () => {
   assert.match(html, /🛠️/u);
   assert.match(html, /href="\/repos"/);
   assert.match(html, /href="\/trajectories"/);
+  assert.match(html, /href="\/containers"/);
   assert.match(html, /href="\/models"/);
   assert.match(html, /href="\/spend"/);
   assert.equal(html.match(/href="\/trajectories\/new"/g)?.length, 1);
+});
+
+void test("lists managed containers with bulk removal actions", () => {
+  const html = renderPage(
+    <ContainersPage
+      containers={[
+        {
+          id: "container-active-123456789",
+          name: "llm-garage-trajectory-trajectory-active",
+          trajectoryId: "trajectory-active",
+          image: "alpine:3.22.5",
+          state: "running",
+          status: "Up 2 minutes",
+          createdAt: new Date("2026-09-06T12:00:00Z"),
+        },
+        {
+          id: "container-idle-123456789",
+          name: "llm-garage-trajectory-trajectory-idle",
+          trajectoryId: "trajectory-idle",
+          image: "alpine:3.22.5",
+          state: "running",
+          status: "Up 10 minutes",
+          createdAt: new Date("2026-09-06T11:52:00Z"),
+        },
+      ]}
+      trajectories={trajectories}
+    />,
+  );
+
+  assert.match(html, /aria-current="page">Containers<\/a>/);
+  assert.match(html, /action="\/containers\/remove-idle"/);
+  assert.match(html, /action="\/containers\/remove-all"/);
+  assert.match(html, /status-active">active<\/span>/);
+  assert.match(html, /status-idle">idle<\/span>/);
+  assert.match(html, /href="\/trajectories\/trajectory-active"/);
+  assert.match(html, /alpine:3\.22\.5/);
 });
 
 void test("loads page styles from the shared stylesheet", () => {

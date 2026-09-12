@@ -144,6 +144,13 @@ code {
   gap: 1rem;
   margin-bottom: 2rem;
 }
+.page-heading h1 {
+  margin-bottom: 0.35rem;
+}
+.page-heading p {
+  margin-bottom: 0;
+  max-width: 680px;
+}
 .page-intro {
   margin-bottom: 2rem;
 }
@@ -385,7 +392,14 @@ fieldset {
 .table-wrap {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
+}
+.container-identity {
+  min-width: 15rem;
+  overflow-wrap: anywhere;
+}
+.container-help {
+  margin-top: 0.75rem;
 }
 table {
   border-collapse: collapse;
