@@ -13,19 +13,20 @@ const dataSource = createAppDataSource(config.DATA_DIR);
 
 async function main(): Promise<void> {
   await dataSource.initialize();
+  const sandbox = new DockerSandbox({
+    docker: new Docker({ socketPath: config.DOCKER_SOCKET }),
+    image: config.WORKER_IMAGE,
+    githubToken: config.GITHUB_TOKEN,
+  });
   const store = new DatabaseDataStore(dataSource, {
     worker: new OpenRouterWorker({
       apiKey: config.OPENROUTER_API_KEY,
       webTools: new WebTools({ braveApiKey: config.BRAVE_SEARCH_API_KEY }),
     }),
-    sandbox: new DockerSandbox({
-      docker: new Docker({ socketPath: config.DOCKER_SOCKET }),
-      image: config.WORKER_IMAGE,
-      githubToken: config.GITHUB_TOKEN,
-    }),
+    sandbox,
   });
   await store.initialize();
-  const app = createApp(dataSource, store);
+  const app = createApp(dataSource, store, sandbox);
 
   let server: Server;
   try {
