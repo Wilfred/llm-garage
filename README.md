@@ -55,10 +55,12 @@ Repositories and trajectories are stored in SQLite at `DATA_DIR/app.db`
 (`data/app.db` by default) and survive restarts.
 
 The Docker daemon must be available to the development process. Each trajectory
-gets a container named `llm-garage-trajectory-<id>`, using `alpine:3.22.5` by
-default. Set `WORKER_IMAGE` to use another compatible image. Worker containers
-have no network access, run as an unprivileged user, and are removed when their
-trajectory is archived.
+gets a container named `llm-garage-trajectory-<id>`, using `node:22-bookworm` by
+default so tools including Git and Node.js are available. Set `WORKER_IMAGE` to
+use another compatible image. Each worker starts with its repository cloned into
+`/workspace`. Worker containers only have network access while cloning, run
+sessions without network access as an unprivileged user, and are removed when
+their trajectory is archived.
 
 Workers can fetch public HTTP(S) text and search the web. Web search uses the
 Brave Search API and requires `BRAVE_SEARCH_API_KEY`. The key stays in the LLM

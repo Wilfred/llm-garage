@@ -465,8 +465,14 @@ export class DatabaseDataStore implements DataStore {
       if (!trajectory) return;
       const model = await this.getModel(trajectory.modelId);
       if (!model) throw new Error(`Unknown model: ${trajectory.modelId}`);
+      const repo = await this.getRepo(trajectory.repoId);
+      if (!repo) throw new Error(`Unknown repository: ${trajectory.repoId}`);
       const messages = await this.conversationMessages(trajectoryId);
-      await this.sandbox.create(trajectoryId);
+      await this.sandbox.create(trajectoryId, {
+        owner: repo.owner,
+        name: repo.name,
+        defaultBranch: repo.defaultBranch,
+      });
       let workerError: unknown;
       try {
         await this.worker.run({

@@ -5,8 +5,14 @@ export type CommandResult = {
   truncated: boolean;
 };
 
+export type SandboxRepository = {
+  owner: string;
+  name: string;
+  defaultBranch: string;
+};
+
 export interface Sandbox {
-  create(trajectoryId: string): Promise<void>;
+  create(trajectoryId: string, repository: SandboxRepository): Promise<void>;
   runCommand(
     trajectoryId: string,
     command: string,
@@ -16,7 +22,10 @@ export interface Sandbox {
 }
 
 export class DisabledSandbox implements Sandbox {
-  async create(_trajectoryId: string): Promise<void> {}
+  async create(
+    _trajectoryId: string,
+    _repository: SandboxRepository,
+  ): Promise<void> {}
 
   async runCommand(
     _trajectoryId: string,

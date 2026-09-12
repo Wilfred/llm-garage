@@ -559,12 +559,15 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
     await rm(dataDir, { recursive: true, force: true });
   });
   await dataSource.initialize();
-  const created: string[] = [];
+  const created: Array<{
+    trajectoryId: string;
+    repository: { owner: string; name: string; defaultBranch: string };
+  }> = [];
   const archived: string[] = [];
   const commands: Array<{ trajectoryId: string; command: string }> = [];
   const sandbox: Sandbox = {
-    create: async (trajectoryId) => {
-      created.push(trajectoryId);
+    create: async (trajectoryId, repository) => {
+      created.push({ trajectoryId, repository });
     },
     runCommand: async (trajectoryId, command) => {
       commands.push({ trajectoryId, command });
@@ -605,7 +608,16 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
   });
 
   await waitForStatus(store, trajectory.id, "succeeded");
-  assert.deepEqual(created, [trajectory.id]);
+  assert.deepEqual(created, [
+    {
+      trajectoryId: trajectory.id,
+      repository: {
+        owner: "example",
+        name: "sandbox-project",
+        defaultBranch: "main",
+      },
+    },
+  ]);
   assert.deepEqual(commands, [
     { trajectoryId: trajectory.id, command: "ls /" },
   ]);
