@@ -22,6 +22,7 @@ void test("configures, executes in, and archives one isolated container", async 
       return {
         State: { Running: true },
         Config: {
+          Env: createOptions?.Env,
           Labels: {
             "com.llm-garage.repository": "example/project",
             "com.llm-garage.default-branch": "trunk",
@@ -80,7 +81,11 @@ void test("configures, executes in, and archives one isolated container", async 
       followProgress: () => undefined,
     },
   } as unknown as Docker;
-  const sandbox = new DockerSandbox({ docker, image: "worker:test" });
+  const sandbox = new DockerSandbox({
+    docker,
+    image: "worker:test",
+    githubToken: "github_pat_test",
+  });
   const repository = {
     owner: "example",
     name: "project",
@@ -92,6 +97,7 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.equal(createOptions.name, containerName(trajectoryId));
   assert.equal(createOptions.Image, "worker:test");
   assert.equal(createOptions.User, "65534:65534");
+  assert.deepEqual(createOptions.Env, ["GITHUB_TOKEN=github_pat_test"]);
   assert.equal(
     createOptions.Labels?.["com.llm-garage.trajectory-id"],
     trajectoryId,
@@ -125,6 +131,16 @@ void test("configures, executes in, and archives one isolated container", async 
     stderr: "",
     truncated: false,
   });
+
+  const credentialedOptions = createOptions;
+  const uncredentialedSandbox = new DockerSandbox({
+    docker,
+    image: "worker:test",
+  });
+  await uncredentialedSandbox.create(trajectoryId, repository);
+  assert.ok(createOptions);
+  assert.notEqual(createOptions, credentialedOptions);
+  assert.equal(createOptions.Env, undefined);
 
   await sandbox.archive(trajectoryId);
   assert.equal(removed, true);

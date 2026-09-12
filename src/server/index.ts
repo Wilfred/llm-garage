@@ -21,6 +21,7 @@ async function main(): Promise<void> {
     sandbox: new DockerSandbox({
       docker: new Docker({ socketPath: config.DOCKER_SOCKET }),
       image: config.WORKER_IMAGE,
+      githubToken: config.GITHUB_TOKEN,
     }),
   });
   await store.initialize();

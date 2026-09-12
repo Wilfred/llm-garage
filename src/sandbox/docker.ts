@@ -12,6 +12,7 @@ const defaultOutputLimit = 64 * 1024;
 export type DockerSandboxOptions = {
   docker?: Docker;
   image?: string;
+  githubToken?: string | undefined;
   memoryBytes?: number;
   nanoCpus?: number;
   pidsLimit?: number;
@@ -21,6 +22,7 @@ export type DockerSandboxOptions = {
 export class DockerSandbox implements Sandbox {
   private readonly docker: Docker;
   private readonly image: string;
+  private readonly githubToken: string | undefined;
   private readonly memoryBytes: number;
   private readonly nanoCpus: number;
   private readonly pidsLimit: number;
@@ -31,6 +33,7 @@ export class DockerSandbox implements Sandbox {
   constructor({
     docker = new Docker(),
     image = "node:22-bookworm",
+    githubToken,
     memoryBytes = 512 * 1024 * 1024,
     nanoCpus = 1_000_000_000,
     pidsLimit = 128,
@@ -38,6 +41,7 @@ export class DockerSandbox implements Sandbox {
   }: DockerSandboxOptions = {}) {
     this.docker = docker;
     this.image = image;
+    this.githubToken = githubToken;
     this.memoryBytes = memoryBytes;
     this.nanoCpus = nanoCpus;
     this.pidsLimit = pidsLimit;
@@ -80,7 +84,8 @@ export class DockerSandbox implements Sandbox {
 
     if (
       details?.State.Running &&
-      matchesRepository(details.Config.Labels, repository)
+      matchesRepository(details.Config.Labels, repository) &&
+      matchesGithubToken(details.Config.Env, this.githubToken)
     ) {
       if (details.NetworkSettings.Networks["bridge"]) {
         await this.disconnectNetwork(trajectoryId);
@@ -100,6 +105,9 @@ export class DockerSandbox implements Sandbox {
       ],
       User: "65534:65534",
       WorkingDir: "/workspace",
+      ...(this.githubToken
+        ? { Env: [`GITHUB_TOKEN=${this.githubToken}`] }
+        : {}),
       Labels: {
         [managedLabel]: "true",
         [trajectoryLabel]: trajectoryId,
@@ -289,6 +297,19 @@ function matchesRepository(
   return (
     labels?.[repositoryLabel] === `${repository.owner}/${repository.name}` &&
     labels[branchLabel] === repository.defaultBranch
+  );
+}
+
+function matchesGithubToken(
+  environment: string[] | undefined,
+  githubToken: string | undefined,
+): boolean {
+  const configuredValue = githubToken
+    ? `GITHUB_TOKEN=${githubToken}`
+    : undefined;
+  return (
+    environment?.find((value) => value.startsWith("GITHUB_TOKEN=")) ===
+    configuredValue
   );
 }
 

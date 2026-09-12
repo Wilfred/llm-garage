@@ -216,8 +216,8 @@ accept a pushed commit as its base, but that must be visible in the child record
   limits. Apply identifying Docker labels and deny privileged mode.
 - Give each trajectory a named workspace volume and branch. Never share a writable
   checkout between trajectories.
-- Inject the GitHub credential only into narrowly scoped clone/push operations,
-  using an askpass helper or equivalent. Do not expose it to the agent process.
+- Pass an explicitly configured GitHub credential to sandbox containers as
+  `GITHUB_TOKEN`, and scrub its value before storing or broadcasting events.
 - Keep the OpenRouter credential in the web process that performs inference. It
   must never enter a sandbox container or tool result. Scrub credential values
   and known token patterns before storing or broadcasting events.
@@ -374,8 +374,7 @@ Definition of done:
 - A trajectory with `none` delivery can be reviewed and delivered later.
 - Empty diffs, push rejection, duplicate requests, API failure, and restart during
   delivery are handled without duplicate PRs.
-- GitHub credentials never appear in the runner environment, database, logs, or
-  rendered pages.
+- GitHub credentials never appear in the database, logs, or rendered pages.
 
 ### M9 — Complete trajectory history and public sharing
 
