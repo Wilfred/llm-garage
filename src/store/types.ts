@@ -15,7 +15,6 @@ export type Repo = {
   owner: string;
   name: string;
   defaultBranch: string;
-  autoMerge: boolean;
   createdAt: Date;
 };
 
@@ -98,7 +97,7 @@ export type DeleteModelResult = "deleted" | "in_use" | "not_found";
 
 export type CreateRepoInput = Pick<
   Repo,
-  "owner" | "name" | "defaultBranch" | "autoMerge"
+  "owner" | "name" | "defaultBranch"
 >;
 
 export type CreateTrajectoriesInput = {
@@ -135,7 +134,6 @@ export interface DataStore {
   listRepos(): Promise<Repo[]>;
   getRepo(id: string): Promise<Repo | undefined>;
   createRepo(input: CreateRepoInput): Promise<Repo>;
-  setRepoAutoMerge(id: string, autoMerge: boolean): Promise<boolean>;
   deleteRepo(id: string): Promise<DeleteRepoResult>;
 
   listTrajectories(): Promise<Trajectory[]>;

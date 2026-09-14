@@ -445,16 +445,6 @@ tr:last-child td {
 a.stat-value {
   color: var(--blue);
 }
-.repo-auto-merge {
-  margin-top: 1rem;
-}
-.auto-merge-form {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 .checkbox {
   display: flex;
   align-items: center;

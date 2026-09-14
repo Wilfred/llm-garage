@@ -39,7 +39,6 @@ void test("persists repository CRUD across data source restarts", async (t) => {
     owner: "example",
     name: "persistent-project",
     defaultBranch: "trunk",
-    autoMerge: false,
   });
   await dataSource.destroy();
 
@@ -51,7 +50,6 @@ void test("persists repository CRUD across data source restarts", async (t) => {
 
   assert.deepEqual(await store.getRepo(created.id), created);
   assert.equal((await store.listRepos()).length, 4);
-  assert.equal(await store.setRepoAutoMerge(created.id, true), true);
   await dataSource.destroy();
 
   dataSource = createAppDataSource(dataDir);
@@ -60,7 +58,6 @@ void test("persists repository CRUD across data source restarts", async (t) => {
   await store.initialize();
   await seedModels(store);
 
-  assert.equal((await store.getRepo(created.id))?.autoMerge, true);
   assert.equal(await store.deleteRepo(created.id), "deleted");
   await dataSource.destroy();
 
@@ -132,7 +129,6 @@ void test("persists model CRUD and keeps models used by trajectories", async (t)
     owner: "example",
     name: "model-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectory = await createOne(store, {
     repoId: repo.id,
@@ -169,14 +165,12 @@ void test("persists trajectories, turns, and ordered events across restarts", as
     owner: "example",
     name: "trajectory-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   await assert.rejects(
     store.createRepo({
       owner: repo.owner,
       name: repo.name,
       defaultBranch: "different",
-      autoMerge: false,
     }),
     RepoAlreadyExistsError,
   );
@@ -254,7 +248,6 @@ void test("commits cancellation state and its event together", async (t) => {
     owner: "example",
     name: "cancel-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectory = await createOne(store, {
     repoId: repo.id,
@@ -302,7 +295,6 @@ void test("sends persisted conversation history to each worker turn", async (t) 
     owner: "example",
     name: "conversation-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectory = await createOne(store, {
     repoId: repo.id,
@@ -351,7 +343,6 @@ void test("runs one trajectory per selected model in a comparison", async (t) =>
     owner: "example",
     name: "compare-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const modelIds = [
     "openai/gpt-5.6-sol",
@@ -417,7 +408,6 @@ void test("leaves a single-model trajectory out of any comparison", async (t) =>
     owner: "example",
     name: "single-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectory = await createOne(store, {
     repoId: repo.id,
@@ -470,13 +460,11 @@ void test("rejects invalid trajectory relationships without partial records", as
     owner: "example",
     name: "first-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const secondRepo = await store.createRepo({
     owner: "example",
     name: "second-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const parent = await createOne(store, {
     repoId: firstRepo.id,
@@ -525,7 +513,6 @@ void test("persists worker failures and their terminal events", async (t) => {
     owner: "example",
     name: "failure-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectory = await createOne(store, {
     repoId: repo.id,
@@ -598,7 +585,6 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
     owner: "example",
     name: "sandbox-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectory = await createOne(store, {
     repoId: repo.id,
@@ -647,7 +633,6 @@ void test("lets the worker name its trajectory", async (t) => {
     owner: "example",
     name: "naming-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectory = await createOne(store, {
     repoId: repo.id,
@@ -695,7 +680,6 @@ void test("aggregates recorded usage into a spend report", async (t) => {
     owner: "example",
     name: "spend-project",
     defaultBranch: "main",
-    autoMerge: false,
   });
   const trajectories = await store.createTrajectories({
     repoId: repo.id,
