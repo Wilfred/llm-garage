@@ -15,11 +15,10 @@ RUN apt-get update \
   && git config --system user.email "llm-garage-agent@users.noreply.github.com" \
   && git config --system credential.https://github.com.helper "!gh auth git-credential"
 
-RUN useradd --create-home --uid 10001 --shell /bin/bash agent \
-  && install -d --owner agent --group agent /workspace
+RUN useradd --create-home --uid 10001 --shell /bin/bash agent
 
 ENV HOME=/home/agent GH_PROMPT_DISABLED=1
 USER agent
-WORKDIR /workspace
+WORKDIR /home/agent
 
 CMD ["/bin/sh", "-c", "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done"]
