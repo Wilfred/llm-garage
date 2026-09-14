@@ -12,7 +12,6 @@ void test("configures, executes in, and archives one isolated container", async 
   let createOptions: Docker.ContainerCreateOptions | undefined;
   let created = false;
   let removed = false;
-  let disconnected = false;
   const executions: Docker.ExecCreateOptions[] = [];
   const setupEvents: string[] = [];
   const container = {
@@ -29,7 +28,7 @@ void test("configures, executes in, and archives one isolated container", async 
             "com.llm-garage.default-branch": "trunk",
           },
         },
-        NetworkSettings: { Networks: {} },
+        NetworkSettings: { Networks: { bridge: {} } },
       };
     },
     start: async () => {
@@ -59,12 +58,6 @@ void test("configures, executes in, and archives one isolated container", async 
   const docker = {
     getContainer: () => container,
     getImage: () => ({ inspect: async () => ({}) }),
-    getNetwork: () => ({
-      disconnect: async () => {
-        disconnected = true;
-        setupEvents.push("disconnect");
-      },
-    }),
     createContainer: async (options: Docker.ContainerCreateOptions) => {
       createOptions = options;
       return container;
@@ -114,8 +107,7 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.deepEqual(hostConfig.CapDrop, ["ALL"]);
   assert.match(hostConfig.Tmpfs?.["/home/agent"] ?? "", /uid=10001/);
   assert.match(hostConfig.Tmpfs?.["/workspace"] ?? "", /size=1g/);
-  assert.equal(disconnected, true);
-  assert.deepEqual(setupEvents, ["start", "clone", "disconnect"]);
+  assert.deepEqual(setupEvents, ["start", "clone"]);
   assert.deepEqual(executions[0]?.Cmd, [
     "git",
     "clone",
@@ -154,6 +146,40 @@ void test("configures, executes in, and archives one isolated container", async 
 
   await sandbox.archive(trajectoryId);
   assert.equal(removed, true);
+});
+
+void test("reconnects an existing worker container to the bridge", async () => {
+  let connectedContainer: string | undefined;
+  const container = {
+    inspect: async () => ({
+      State: { Running: true },
+      Config: {
+        Image: "ghcr.io/wilfred/llm-garage:worker",
+        Labels: {
+          "com.llm-garage.repository": "example/project",
+          "com.llm-garage.default-branch": "main",
+        },
+      },
+      NetworkSettings: { Networks: {} },
+    }),
+  };
+  const docker = {
+    getContainer: () => container,
+    getNetwork: () => ({
+      connect: async ({ Container }: { Container: string }) => {
+        connectedContainer = Container;
+      },
+    }),
+  } as unknown as Docker;
+  const sandbox = new DockerSandbox({ docker });
+
+  await sandbox.create("existing", {
+    owner: "example",
+    name: "project",
+    defaultBranch: "main",
+  });
+
+  assert.equal(connectedContainer, containerName("existing"));
 });
 
 void test("lists and removes only managed containers that are not kept", async () => {
@@ -266,7 +292,7 @@ void test(
       details.Config.Labels["com.llm-garage.trajectory-id"],
       trajectoryId,
     );
-    assert.deepEqual(details.NetworkSettings.Networks, {});
+    assert.ok(details.NetworkSettings.Networks["bridge"]);
     assert.equal(details.HostConfig.Privileged, false);
 
     const result = await sandbox.runCommand(

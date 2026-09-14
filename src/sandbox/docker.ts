@@ -98,8 +98,10 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       matchesRepository(details.Config.Labels, repository) &&
       matchesGithubToken(details.Config.Env, this.githubToken)
     ) {
-      if (details.NetworkSettings.Networks["bridge"]) {
-        await this.disconnectNetwork(trajectoryId);
+      if (!details.NetworkSettings.Networks["bridge"]) {
+        await this.docker.getNetwork("bridge").connect({
+          Container: containerName(trajectoryId),
+        });
       }
       return;
     }
@@ -146,18 +148,10 @@ export class DockerSandbox implements Sandbox, ContainerManager {
     try {
       await container.start();
       await this.cloneRepository(container, repository);
-      await this.disconnectNetwork(trajectoryId);
     } catch (error) {
       await container.remove({ force: true, v: true }).catch(() => undefined);
       throw error;
     }
-  }
-
-  private async disconnectNetwork(trajectoryId: string): Promise<void> {
-    await this.docker.getNetwork("bridge").disconnect({
-      Container: containerName(trajectoryId),
-      Force: true,
-    });
   }
 
   private async cloneRepository(
