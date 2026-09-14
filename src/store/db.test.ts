@@ -625,6 +625,44 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
   assert.deepEqual(archived, [trajectory.id]);
 });
 
+void test("lets the worker name its trajectory", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-name-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        assert.ok(context.setTrajectoryName);
+        await context.setTrajectoryName("Inspect command output");
+      },
+    },
+  });
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "naming-project",
+    defaultBranch: "main",
+    autoMerge: false,
+  });
+  const trajectory = await createOne(store, {
+    repoId: repo.id,
+    title: "Initial generated title",
+    modelIds: ["openai/gpt-5.6-sol"],
+    taskPrompt: "Inspect the command output",
+  });
+
+  await waitForStatus(store, trajectory.id, "succeeded");
+  assert.equal(
+    (await store.getTrajectory(trajectory.id))?.title,
+    "Inspect command output",
+  );
+});
+
 void test("aggregates recorded usage into a spend report", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-spend-"));
   const dataSource = createAppDataSource(dataDir);

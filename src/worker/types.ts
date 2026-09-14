@@ -19,6 +19,7 @@ export type WorkerContext = {
   signal: AbortSignal;
   emit: (event: WorkerEvent) => void;
   runCommand?: (command: string) => Promise<CommandResult>;
+  setTrajectoryName?: (name: string) => Promise<void>;
 };
 
 export interface TrajectoryWorker {
