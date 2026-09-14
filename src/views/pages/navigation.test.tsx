@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Trajectory, TrajectoryStatus, Turn } from "../../store/types";
+import type {
+  RunEvent,
+  Trajectory,
+  TrajectoryStatus,
+  Turn,
+} from "../../store/types";
 import { createStarterModels, createStarterRepos } from "../../store/seed";
 import { renderPage } from "../render";
 import { trajectoryDisplayStatus } from "../components";
@@ -440,6 +445,65 @@ void test("shows model output outside the collapsed turn details", () => {
   assert.doesNotMatch(html, /<details[^>]*open/);
 });
 
+void test("shows event details below the model output they follow", () => {
+  const trajectory = trajectories.find(({ id }) => id === "trajectory-idle");
+  assert.ok(trajectory);
+  const turn = turnFor(trajectory);
+  const ts = new Date("2026-01-01T09:30:00Z");
+  const html = renderPage(
+    <TrajectoryDetailPage
+      trajectory={trajectory}
+      transcript={[
+        {
+          turn,
+          events: [
+            runEvent(
+              turn,
+              "first-output",
+              1,
+              "model_output",
+              "First response",
+              ts,
+            ),
+            runEvent(turn, "first-tool", 2, "tool", "Inspected files", ts),
+            runEvent(
+              turn,
+              "second-output",
+              3,
+              "model_output",
+              "Second response",
+              ts,
+            ),
+            runEvent(turn, "second-tool", 4, "tool", "Ran tests", ts),
+            runEvent(
+              turn,
+              "final-output",
+              5,
+              "model_output",
+              "Final response",
+              ts,
+            ),
+          ],
+        },
+      ]}
+    />,
+  );
+
+  const firstOutput = html.indexOf("First response");
+  const firstDetails = html.indexOf("<details", firstOutput);
+  const secondOutput = html.indexOf("Second response");
+  const secondDetails = html.indexOf("<details", secondOutput);
+  const finalOutput = html.indexOf("Final response");
+
+  assert.ok(firstOutput < firstDetails);
+  assert.ok(firstDetails < secondOutput);
+  assert.ok(secondOutput < secondDetails);
+  assert.ok(secondDetails < finalOutput);
+  assert.match(html.slice(firstDetails, secondOutput), /Inspected files/);
+  assert.doesNotMatch(html.slice(firstDetails, secondOutput), /Ran tests/);
+  assert.match(html.slice(secondDetails, finalOutput), /Ran tests/);
+});
+
 void test("renders model output as markdown without raw HTML", () => {
   const trajectory = trajectories.find(({ id }) => id === "trajectory-idle");
   assert.ok(trajectory);
@@ -582,5 +646,24 @@ function turnFor(trajectory: Trajectory): Turn {
     status: "succeeded",
     createdAt: trajectory.createdAt,
     finishedAt: trajectory.updatedAt,
+  };
+}
+
+function runEvent(
+  turn: Turn,
+  id: string,
+  sequence: number,
+  kind: RunEvent["kind"],
+  data: string,
+  ts: Date,
+): RunEvent {
+  return {
+    id,
+    trajectoryId: turn.trajectoryId,
+    turnId: turn.id,
+    sequence,
+    kind,
+    data,
+    ts,
   };
 }
