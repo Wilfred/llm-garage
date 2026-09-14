@@ -183,39 +183,59 @@ export function TrajectoryDetailPage({
 }
 
 function TurnCard({ turn, events }: TurnTranscript) {
-  const output = events
-    .filter((event) => event.kind === "model_output")
-    .map((event) => event.data)
-    .join("\n\n");
-  const details = events.filter((event) => event.kind !== "model_output");
+  const groups = groupTurnEvents(events);
   return (
     <article class="card">
       <p class="turn-prompt">{turn.prompt}</p>
-      {output ? (
-        <div
-          class="model-output"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
-        />
-      ) : (
-        <p class="model-output empty-output">No output yet.</p>
-      )}
-      {details.length > 0 && (
-        <details class="turn-details">
-          <summary>
-            {details.length} {details.length === 1 ? "event" : "events"}
-          </summary>
-          <pre class="log">
-            {details
-              .map(
-                (event) =>
-                  `${event.ts.toLocaleTimeString("en-GB")}  [${event.kind}] ${event.data}`,
-              )
-              .join("\n")}
-          </pre>
-        </details>
-      )}
+      {groups.map(({ output, details }) => (
+        <>
+          {output ? (
+            <div
+              class="model-output"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(output) }}
+            />
+          ) : (
+            <p class="model-output empty-output">No output yet.</p>
+          )}
+          {details.length > 0 && (
+            <details class="turn-details">
+              <summary>
+                {details.length} {details.length === 1 ? "event" : "events"}
+              </summary>
+              <pre class="log">
+                {details
+                  .map(
+                    (event) =>
+                      `${event.ts.toLocaleTimeString("en-GB")}  [${event.kind}] ${event.data}`,
+                  )
+                  .join("\n")}
+              </pre>
+            </details>
+          )}
+        </>
+      ))}
     </article>
   );
+}
+
+function groupTurnEvents(events: RunEvent[]) {
+  const groups: Array<{ output?: string; details: RunEvent[] }> = [];
+  const leadingDetails: RunEvent[] = [];
+
+  for (const event of events) {
+    if (event.kind === "model_output") {
+      groups.push({
+        output: event.data,
+        details: groups.length === 0 ? leadingDetails : [],
+      });
+      continue;
+    }
+
+    const current = groups.at(-1);
+    (current?.details ?? leadingDetails).push(event);
+  }
+
+  return groups.length > 0 ? groups : [{ details: leadingDetails }];
 }
 
 export function TrajectoriesPage({
