@@ -483,6 +483,8 @@ export class DatabaseDataStore implements DataStore {
           signal: controller.signal,
           runCommand: (command) =>
             this.sandbox.runCommand(trajectoryId, command, controller.signal),
+          setTrajectoryName: (name) =>
+            this.setTrajectoryName(trajectoryId, name),
           emit: (event) => {
             writes = writes.then(() =>
               this.recordWorkerEvent(trajectoryId, turnId, event),
@@ -581,6 +583,22 @@ export class DatabaseDataStore implements DataStore {
         event.data,
         now,
       );
+    });
+  }
+
+  private async setTrajectoryName(
+    trajectoryId: string,
+    name: string,
+  ): Promise<void> {
+    await this.transaction(async (manager) => {
+      const repository = manager.getRepository(TrajectoryEntity);
+      const trajectory = await repository.findOneBy({ id: trajectoryId });
+      if (trajectory?.status !== "running") {
+        throw new Error("Trajectory is not running");
+      }
+      trajectory.title = name;
+      trajectory.updatedAt = this.now();
+      await repository.save(trajectory);
     });
   }
 

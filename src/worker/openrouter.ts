@@ -7,7 +7,9 @@ const defaultEndpoint = "https://openrouter.ai/api/v1/chat/completions";
 
 const codingAgentPrompt = `You are a coding agent working in an isolated Docker container for one LLM Garage trajectory. The requested repository is cloned at /workspace, which is your working directory, and your writable home is /home/agent. The container has outbound network access and common development tools including Git, GitHub CLI, curl, jq, ripgrep, Python, Node.js, npm, and native build tools. When GITHUB_TOKEN is available, Git and GitHub CLI are configured to use it.
 
-Use the environment to complete the requested software task. Typical goals include examining a codebase, investigating or fixing a bug, implementing a feature, running appropriate validation, and creating or updating a pull request. Read repository-local instructions such as AGENTS.md before changing code, and follow the user's requested scope and delivery split.`;
+Use the environment to complete the requested software task. Typical goals include examining a codebase, investigating or fixing a bug, implementing a feature, running appropriate validation, and creating or updating a pull request. Read repository-local instructions such as AGENTS.md before changing code, and follow the user's requested scope and delivery split.
+
+Set a concise, specific trajectory name with set_trajectory_name near the start of the session, as soon as you understand the task.`;
 
 const completionSchema = z.object({
   choices: z
@@ -48,6 +50,10 @@ const commandArgumentsSchema = z.object({
   command: z.string().min(1).max(4096),
 });
 
+const setTrajectoryNameArgumentsSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+
 const fetchUrlArgumentsSchema = z.object({
   url: z.url().max(2048),
 });
@@ -63,6 +69,27 @@ const searchWebArgumentsSchema = z.object({
 });
 
 const tools = [
+  {
+    type: "function",
+    function: {
+      name: "set_trajectory_name",
+      description:
+        "Set a concise, specific name that identifies this trajectory in LLM Garage.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 80,
+            description: "The trajectory name.",
+          },
+        },
+        required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  },
   {
     type: "function",
     function: {
@@ -268,6 +295,29 @@ export class OpenRouterWorker implements TrajectoryWorker {
       return JSON.stringify({ error: "Tool arguments are not valid JSON" });
     }
     switch (toolCall.function.name) {
+      case "set_trajectory_name": {
+        const parsed = setTrajectoryNameArgumentsSchema.safeParse(rawArguments);
+        if (!parsed.success) {
+          return JSON.stringify({
+            error: "Invalid set_trajectory_name arguments",
+          });
+        }
+        const setTrajectoryName = context.setTrajectoryName;
+        if (!setTrajectoryName) {
+          return JSON.stringify({
+            error: "Trajectory naming is not configured",
+          });
+        }
+        return this.executeTool(
+          "set_trajectory_name",
+          parsed.data,
+          context,
+          async () => {
+            await setTrajectoryName(parsed.data.name);
+            return { name: parsed.data.name };
+          },
+        );
+      }
       case "run_command": {
         const parsed = commandArgumentsSchema.safeParse(rawArguments);
         if (!parsed.success) {
