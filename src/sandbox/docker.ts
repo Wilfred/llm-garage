@@ -14,7 +14,8 @@ const managedLabel = "com.llm-garage.managed";
 const trajectoryLabel = "com.llm-garage.trajectory-id";
 const repositoryLabel = "com.llm-garage.repository";
 const branchLabel = "com.llm-garage.default-branch";
-const defaultOutputLimit = 64 * 1024;
+const defaultOutputLimit = 16 * 1024;
+const truncationMarker = Buffer.from("\n... output truncated ...\n");
 const defaultWorkerImage = "ghcr.io/wilfred/llm-garage:worker";
 const workerUser = "agent";
 const workerUid = 10001;
@@ -381,17 +382,50 @@ function capture(
   limit: number,
 ): Promise<{ text: string; truncated: boolean }> {
   return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
+    const headChunks: Buffer[] = [];
+    const headLimit = Math.floor(
+      Math.max(0, limit - truncationMarker.length) / 2,
+    );
+    let headBytes = 0;
+    let tail = Buffer.alloc(0);
     let bytes = 0;
-    let truncated = false;
     stream.on("data", (chunk: Buffer) => {
-      const remaining = Math.max(0, limit - bytes);
-      if (remaining > 0) chunks.push(chunk.subarray(0, remaining));
-      bytes += Math.min(chunk.length, remaining);
-      if (chunk.length > remaining) truncated = true;
+      bytes += chunk.length;
+      const headRemaining = Math.max(0, headLimit - headBytes);
+      if (headRemaining > 0) {
+        const captured = chunk.subarray(0, headRemaining);
+        headChunks.push(captured);
+        headBytes += captured.length;
+        chunk = chunk.subarray(captured.length);
+      }
+      if (chunk.length === 0) return;
+      tail = Buffer.concat([tail, chunk]);
+      const tailLimit = Math.max(0, limit - headBytes);
+      if (tail.length > tailLimit)
+        tail = tail.subarray(tail.length - tailLimit);
     });
     stream.on("end", () => {
-      resolve({ text: Buffer.concat(chunks).toString("utf8"), truncated });
+      const head = Buffer.concat(headChunks);
+      if (bytes <= limit) {
+        resolve({
+          text: Buffer.concat([head, tail]).toString("utf8"),
+          truncated: false,
+        });
+        return;
+      }
+      const marker = truncationMarker.subarray(
+        0,
+        Math.max(0, limit - head.length),
+      );
+      const tailLimit = Math.max(0, limit - head.length - marker.length);
+      resolve({
+        text: Buffer.concat([
+          head,
+          marker,
+          tail.subarray(Math.max(0, tail.length - tailLimit)),
+        ]).toString("utf8"),
+        truncated: true,
+      });
     });
     stream.on("error", reject);
   });

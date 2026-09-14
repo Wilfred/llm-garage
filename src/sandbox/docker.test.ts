@@ -41,9 +41,16 @@ void test("configures, executes in, and archives one isolated container", async 
         start: async () => {
           if (options.Cmd?.[0] === "git") setupEvents.push("clone");
           const stream = new PassThrough();
-          setImmediate(() =>
-            stream.end(options.Cmd?.[0] === "git" ? "" : "bin\nworkspace\n"),
-          );
+          setImmediate(() => {
+            const command = options.Cmd?.at(-1);
+            stream.end(
+              options.Cmd?.[0] === "git"
+                ? ""
+                : command === "verbose"
+                  ? `start${".".repeat(100)}end`
+                  : "bin\nworkspace\n",
+            );
+          });
           return stream;
         },
         inspect: async () => ({ ExitCode: 0 }),
@@ -133,6 +140,23 @@ void test("configures, executes in, and archives one isolated container", async 
     truncated: false,
   });
   assert.equal(executions[1]?.WorkingDir, "/home/agent/repo");
+
+  const limitedSandbox = new DockerSandbox({
+    docker,
+    image: "worker:test",
+    githubToken: "github_pat_test",
+    outputLimitBytes: 64,
+  });
+  const limitedResult = await limitedSandbox.runCommand(
+    trajectoryId,
+    "verbose",
+    new AbortController().signal,
+  );
+  assert.equal(Buffer.byteLength(limitedResult.stdout), 64);
+  assert.match(limitedResult.stdout, /^start/);
+  assert.match(limitedResult.stdout, /\.\.\. output truncated \.\.\./);
+  assert.match(limitedResult.stdout, /end$/);
+  assert.equal(limitedResult.truncated, true);
 
   const credentialedOptions = createOptions;
   const uncredentialedSandbox = new DockerSandbox({
