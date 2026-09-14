@@ -57,12 +57,13 @@ Repositories and trajectories are stored in SQLite at `DATA_DIR/app.db`
 The Docker daemon must be available to the development process. Each trajectory
 gets a container named `llm-garage-trajectory-<id>`, using the published
 `ghcr.io/wilfred/llm-garage:worker` image by default. The image provides
-Git, GitHub CLI, curl, jq, ripgrep, Python, native build tools, and the current
-Node.js LTS. Set `WORKER_IMAGE` to use another compatible image. Each worker starts
-with its repository cloned into `/home/agent/repo`. Worker containers retain
-network access, run sessions as an unprivileged user, and are removed when their
-trajectory is archived. If `GITHUB_TOKEN` is set for the LLM Garage process, it
-is also available to trajectory commands in the container.
+Git, GitHub CLI, curl, jq, ripgrep, Python with pip, Rust with Cargo, the Docker
+CLI, CMake, native build tools, and the current Node.js LTS. Set `WORKER_IMAGE`
+to use another compatible image. Each worker starts with its repository cloned
+into `/home/agent/repo`. Worker containers retain network access, run sessions
+as an unprivileged user, and are removed when their trajectory is archived. If
+`GITHUB_TOKEN` is set for the LLM Garage process, it is also available to
+trajectory commands in the container.
 
 The default image runs a named `agent` account with a writable 10 GiB home
 directory containing the repository. Its system Git configuration supplies the
