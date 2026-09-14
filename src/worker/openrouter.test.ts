@@ -59,6 +59,8 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
       messages: Array<{ role: string; content: string }>;
     }
   ).messages;
+  assert.match(messages[0]?.content ?? "", /\/home\/agent\/repo/);
+  assert.doesNotMatch(messages[0]?.content ?? "", /\/workspace/);
   assert.match(messages[0]?.content ?? "", /set_trajectory_name/);
   assert.deepEqual(messages.slice(-3), [
     { role: "user", content: "First question" },
