@@ -6,7 +6,6 @@ const starterRepos: Array<Omit<Repo, "createdAt"> & { ageMinutes: number }> = [
     owner: "Wilfred",
     name: "llm-garage",
     defaultBranch: "main",
-    autoMerge: true,
     ageMinutes: 9_000,
   },
   {
@@ -14,7 +13,6 @@ const starterRepos: Array<Omit<Repo, "createdAt"> & { ageMinutes: number }> = [
     owner: "Wilfred",
     name: "tree-sitter-elisp",
     defaultBranch: "master",
-    autoMerge: false,
     ageMinutes: 8_000,
   },
   {
@@ -22,7 +20,6 @@ const starterRepos: Array<Omit<Repo, "createdAt"> & { ageMinutes: number }> = [
     owner: "Wilfred",
     name: "digital-garden",
     defaultBranch: "main",
-    autoMerge: false,
     ageMinutes: 7_000,
   },
 ];

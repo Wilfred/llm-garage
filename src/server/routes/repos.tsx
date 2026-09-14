@@ -40,7 +40,6 @@ export function createReposRouter(store: DataStore): Router {
     const owner = formField(req.body, "owner");
     const name = formField(req.body, "name");
     const defaultBranch = formField(req.body, "defaultBranch");
-    const autoMerge = formField(req.body, "autoMerge") === "on";
     if (!owner || !name || !defaultBranch) {
       res
         .status(400)
@@ -53,7 +52,7 @@ export function createReposRouter(store: DataStore): Router {
       return;
     }
     try {
-      await store.createRepo({ owner, name, defaultBranch, autoMerge });
+      await store.createRepo({ owner, name, defaultBranch });
     } catch (error) {
       if (!(error instanceof RepoAlreadyExistsError)) throw error;
       res
@@ -96,15 +95,6 @@ export function createReposRouter(store: DataStore): Router {
           />,
         ),
       );
-  });
-
-  router.post("/repos/:id/auto-merge", async (req, res) => {
-    const autoMerge = formField(req.body, "autoMerge") === "on";
-    const found = await store.setRepoAutoMerge(req.params.id, autoMerge);
-    const notice = found
-      ? `Auto-merge ${autoMerge ? "enabled" : "disabled"}.`
-      : "Repository not found.";
-    res.redirect(303, noticeUrl(`/repos/${req.params.id}`, notice));
   });
 
   router.post("/repos/:id/delete", async (req, res) => {

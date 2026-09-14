@@ -25,9 +25,7 @@ The target feature set is:
    performance over time.
 4. Run linked trajectories from the same prompt and source revision for side-by-side
    A/B testing.
-5. Optionally auto-merge pull requests for a repository when their required CI
-   checks pass.
-6. Let an agent spawn a durable child trajectory for related work without relying
+5. Let an agent spawn a durable child trajectory for related work without relying
    on short-lived subagents.
 
 ## Scope and principles
@@ -179,8 +177,7 @@ environment-provided credentials remain outside ordinary product records.
 3. A transaction creates the queued trajectory and its first event.
 4. The scheduler assigns an isolated Docker workspace and invokes the runner.
 5. Runner output is normalized into events and summarized on the trajectory.
-6. On success, the trajectory opens a pull request, and merges it when the
-   repository enables auto-merge.
+6. On success, the trajectory opens a pull request.
 
 ### Side-by-side comparison
 
@@ -421,27 +418,7 @@ Definition of done:
 - Selecting a winner immediately and correctly updates aggregate reporting.
 - Refreshes and restarts preserve comparison membership and feedback.
 
-### M11 — Drive-by trajectories and auto-merge
-
-Build:
-
-- Implement the repository auto-merge setting on top of the existing PR state
-  machine.
-- Observe required checks and combined commit status with bounded polling,
-  jitter, retry/backoff, and a terminal timeout.
-- Persist check observations and resume monitoring after application restart.
-- Merge with an operator-configured method only when the expected head SHA is
-  still current and all required policy conditions pass.
-- Surface pending, blocked, failed, and merged outcomes on trajectory pages.
-
-Definition of done:
-
-- A green pull request is merged once and its merge SHA is stored.
-- Failing checks, a changed head SHA, merge conflicts, API throttling, zero-check
-  policy, timeout, and restart are covered without accidental merges.
-- Manual and automatic delivery share the same audited state transitions.
-
-### M12 — Spawned trajectories and agent control API
+### M11 — Spawned trajectories and agent control API
 
 Build:
 
@@ -473,8 +450,7 @@ Definition of done:
 | Track complete trajectories and allow public sharing      | M4, M5, M7, M9      |
 | Record preferred results and summarize model performance  | M10                 |
 | Run linked trajectories side by side                      | M10                 |
-| Auto-merge when CI is green                               | M11                 |
-| Spawn durable child trajectories from an active agent     | M12                 |
+| Spawn durable child trajectories from an active agent     | M11                 |
 
 ## Cross-cutting quality gates
 
