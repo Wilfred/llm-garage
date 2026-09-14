@@ -32,13 +32,11 @@ export function Layout({
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="dark" />
-        {refreshSeconds && (
-          <meta http-equiv="refresh" content={String(refreshSeconds)} />
-        )}
         <title>
           {title === "LLM Garage" ? title : `${title} · LLM Garage`}
         </title>
         <link rel="stylesheet" href="/styles.css" />
+        {refreshSeconds && <script src="/refresh.js" defer />}
       </head>
       <body>
         <header class="site-header">
@@ -65,7 +63,13 @@ export function Layout({
             New trajectory
           </a>
         </header>
-        <main>{children}</main>
+        <main
+          {...(refreshSeconds
+            ? { "data-refresh-seconds": String(refreshSeconds) }
+            : {})}
+        >
+          {children}
+        </main>
         <footer>
           <a href="/about">About</a>
         </footer>
