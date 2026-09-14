@@ -187,7 +187,7 @@ function TurnCard({ turn, events }: TurnTranscript) {
   return (
     <article class="card">
       <p class="turn-prompt">{turn.prompt}</p>
-      {groups.map(({ output, details }) => (
+      {groups.map(({ output, details }, index) => (
         <>
           {output ? (
             <div
@@ -198,7 +198,10 @@ function TurnCard({ turn, events }: TurnTranscript) {
             <p class="model-output empty-output">No output yet.</p>
           )}
           {details.length > 0 && (
-            <details class="turn-details">
+            <details
+              class="turn-details"
+              data-refresh-key={`${turn.id}:${index.toString()}`}
+            >
               <summary>
                 {details.length} {details.length === 1 ? "event" : "events"}
               </summary>

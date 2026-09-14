@@ -110,6 +110,24 @@ void test("loads page styles from the shared stylesheet", () => {
   );
 
   assert.match(html, /<link rel="stylesheet" href="\/styles\.css"\/>/);
+  assert.doesNotMatch(html, /refresh\.js/);
+});
+
+void test("renders active trajectory content before enabling live updates", () => {
+  const trajectory = trajectories.find(({ id }) => id === "trajectory-active");
+  assert.ok(trajectory);
+  const html = renderPage(
+    <TrajectoryDetailPage
+      trajectory={trajectory}
+      transcript={[{ turn: turnFor(trajectory), events: [] }]}
+    />,
+  );
+
+  assert.match(html, /<main data-refresh-seconds="1">/);
+  assert.match(html, /<script src="\/refresh\.js" defer><\/script>/);
+  assert.match(html, /status-active">active<\/span>/);
+  assert.match(html, /No output yet\./);
+  assert.doesNotMatch(html, /http-equiv="refresh"/);
 });
 
 void test("renders repository links and trajectory counts", () => {
@@ -442,6 +460,7 @@ void test("shows model output outside the collapsed turn details", () => {
   assert.match(beforeDetails, /The capital of France is Paris\./);
   assert.doesNotMatch(beforeDetails, /Trajectory finished/);
   assert.match(html, /<summary>1 event<\/summary>/);
+  assert.match(html, new RegExp(`data-refresh-key="${turn.id}:0"`));
   assert.doesNotMatch(html, /<details[^>]*open/);
 });
 
@@ -561,6 +580,25 @@ void test("shows each compared model's output side by side", () => {
   assert.match(html, /Opus answered/);
   assert.match(html, /href="\/trajectories\/compare-sol"/);
   assert.match(html, /href="\/trajectories\/compare-opus"/);
+});
+
+void test("live updates an active comparison after rendering every column", () => {
+  const [repo] = repos;
+  assert.ok(repo);
+  const active = comparisonColumn(
+    "compare-active",
+    "openai/gpt-5.6-sol",
+    "Partial answer",
+  );
+  active.trajectory.status = "running";
+  const html = renderPage(
+    <ComparisonPage repo={repo} models={models} columns={[active]} />,
+  );
+
+  assert.match(html, /<main data-refresh-seconds="1">/);
+  assert.match(html, /Partial answer/);
+  assert.match(html, /<script src="\/refresh\.js" defer><\/script>/);
+  assert.doesNotMatch(html, /http-equiv="refresh"/);
 });
 
 void test("links a compared trajectory back to its comparison", () => {
