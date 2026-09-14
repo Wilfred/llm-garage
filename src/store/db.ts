@@ -76,12 +76,14 @@ export class DatabaseDataStore implements DataStore {
   }
 
   async initialize(): Promise<void> {
-    if (!this.seed) return;
-    if ((await this.repoRepository.count()) === 0) {
-      await this.repoRepository.save(createStarterRepos());
-    }
-    if ((await this.modelRepository.count()) === 0) {
-      await this.modelRepository.save(createStarterModels());
+    await this.failInterruptedWorkers();
+    if (this.seed) {
+      if ((await this.repoRepository.count()) === 0) {
+        await this.repoRepository.save(createStarterRepos());
+      }
+      if ((await this.modelRepository.count()) === 0) {
+        await this.modelRepository.save(createStarterModels());
+      }
     }
   }
 
@@ -447,6 +449,42 @@ export class DatabaseDataStore implements DataStore {
     const controller = new AbortController();
     this.activeWorkers.set(trajectoryId, controller);
     void this.runWorker(trajectoryId, turnId, controller);
+  }
+
+  private async failInterruptedWorkers(): Promise<void> {
+    await this.transaction(async (manager) => {
+      const trajectories = await manager.getRepository(TrajectoryEntity).find({
+        where: [{ status: "running" }, { status: "queued" }],
+      });
+      for (const trajectory of trajectories) {
+        const now = this.now();
+        trajectory.status = "failed";
+        trajectory.updatedAt = now;
+        await manager.getRepository(TrajectoryEntity).save(trajectory);
+
+        const turn = await this.activeTurn(manager, trajectory.id);
+        if (!turn) continue;
+        turn.status = "failed";
+        turn.finishedAt = now;
+        await manager.getRepository(TurnEntity).save(turn);
+        await this.appendEvent(
+          manager,
+          trajectory.id,
+          turn.id,
+          "system",
+          "Worker interrupted when LLM Garage restarted",
+          now,
+        );
+        await this.appendEvent(
+          manager,
+          trajectory.id,
+          turn.id,
+          "status",
+          "Trajectory failed",
+          now,
+        );
+      }
+    });
   }
 
   private async runWorker(

@@ -6,6 +6,9 @@ import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import type { DataSource } from "typeorm";
 import { createAppDataSource } from "../db/data-source";
+import { RunEventEntity } from "../entities/run-event";
+import { TrajectoryEntity } from "../entities/trajectory";
+import { TurnEntity } from "../entities/turn";
 import { ModelAlreadyExistsError, RepoAlreadyExistsError } from "./errors";
 import { createStarterModels } from "./seed";
 import { DatabaseDataStore } from "./db";
@@ -225,6 +228,88 @@ void test("persists trajectories, turns, and ordered events across restarts", as
     feedbackEvents,
   );
   assert.equal(await restartedStore.deleteRepo(repo.id), "in_use");
+});
+
+void test("fails workers interrupted by an application restart", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-restart-"));
+  let dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const store = new DatabaseDataStore(dataSource, { seed: false });
+  await store.initialize();
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "interrupted-project",
+    defaultBranch: "main",
+  });
+  const startedAt = new Date("2026-09-14T23:02:42Z");
+  const trajectoryId = "interrupted-trajectory";
+  const turnId = "interrupted-turn";
+  await dataSource.getRepository(TrajectoryEntity).save({
+    id: trajectoryId,
+    parentId: null,
+    rootId: trajectoryId,
+    comparisonId: null,
+    repoId: repo.id,
+    title: "Interrupt the trajectory",
+    status: "running",
+    modelId: "openai/gpt-5.6-sol",
+    taskPrompt: "Wait for an application restart",
+    prUrl: null,
+    createdAt: startedAt,
+    updatedAt: startedAt,
+  });
+  await dataSource.getRepository(TurnEntity).save({
+    id: turnId,
+    trajectoryId,
+    kind: "initial",
+    prompt: "Wait for an application restart",
+    status: "running",
+    createdAt: startedAt,
+    finishedAt: null,
+  });
+  await dataSource.getRepository(RunEventEntity).save({
+    id: "interrupted-event",
+    trajectoryId,
+    turnId,
+    sequence: 1,
+    kind: "status",
+    data: "GPT-5.6 Sol started",
+    ts: startedAt,
+  });
+
+  await dataSource.destroy();
+  dataSource = createAppDataSource(dataDir);
+  await dataSource.initialize();
+  const restartedStore = new DatabaseDataStore(dataSource, { seed: false });
+  await restartedStore.initialize();
+
+  assert.equal(
+    (await restartedStore.getTrajectory(trajectoryId))?.status,
+    "failed",
+  );
+  const [turn] = await restartedStore.listTurns(trajectoryId);
+  assert.ok(turn);
+  assert.equal(turn.status, "failed");
+  assert.ok(turn.finishedAt);
+  assert.deepEqual(
+    (await restartedStore.listRunEvents(turn.id)).map(({ kind, data }) => ({
+      kind,
+      data,
+    })),
+    [
+      { kind: "status", data: "GPT-5.6 Sol started" },
+      {
+        kind: "system",
+        data: "Worker interrupted when LLM Garage restarted",
+      },
+      { kind: "status", data: "Trajectory failed" },
+    ],
+  );
 });
 
 void test("commits cancellation state and its event together", async (t) => {
