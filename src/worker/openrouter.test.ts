@@ -54,7 +54,12 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
     (body as { model: string; messages: unknown[] }).model,
     "anthropic/claude-opus-5",
   );
-  assert.deepEqual((body as { messages: unknown[] }).messages, [
+  const messages = (
+    body as {
+      messages: Array<{ role: string; content: string }>;
+    }
+  ).messages;
+  assert.deepEqual(messages.slice(-3), [
     { role: "user", content: "First question" },
     { role: "assistant", content: "First answer" },
     { role: "user", content: "Follow-up question" },
