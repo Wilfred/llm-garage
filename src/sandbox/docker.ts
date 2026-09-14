@@ -18,6 +18,8 @@ const defaultOutputLimit = 64 * 1024;
 const defaultWorkerImage = "ghcr.io/wilfred/llm-garage:worker";
 const workerUser = "agent";
 const workerUid = 10001;
+const workerHome = "/home/agent";
+const repositoryPath = `${workerHome}/repo`;
 
 export type DockerSandboxOptions = {
   docker?: Docker;
@@ -117,9 +119,9 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done",
       ],
       User: workerUser,
-      WorkingDir: "/workspace",
+      WorkingDir: workerHome,
       Env: [
-        "HOME=/home/agent",
+        `HOME=${workerHome}`,
         "GH_PROMPT_DISABLED=1",
         ...(this.githubToken ? [`GITHUB_TOKEN=${this.githubToken}`] : []),
       ],
@@ -139,9 +141,8 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         ReadonlyRootfs: true,
         SecurityOpt: ["no-new-privileges:true"],
         Tmpfs: {
-          "/home/agent": `rw,nosuid,nodev,size=1g,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0700`,
+          [workerHome]: `rw,nosuid,nodev,size=10g,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0700`,
           "/tmp": "rw,nosuid,nodev,size=64m,mode=1777",
-          "/workspace": `rw,nosuid,nodev,size=1g,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0750`,
         },
       },
     });
@@ -167,13 +168,13 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         "--single-branch",
         "--",
         `https://github.com/${repository.owner}/${repository.name}.git`,
-        "/workspace",
+        repositoryPath,
       ],
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
       User: workerUser,
-      WorkingDir: "/workspace",
+      WorkingDir: workerHome,
     });
     const stream = await execution.start({ hijack: true, stdin: false });
     const stdout = new PassThrough();
@@ -217,7 +218,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       AttachStderr: true,
       Tty: false,
       User: workerUser,
-      WorkingDir: "/workspace",
+      WorkingDir: repositoryPath,
     });
     const stream = await execution.start({ hijack: true, stdin: false });
     const stdout = new PassThrough();

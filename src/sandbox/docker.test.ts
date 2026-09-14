@@ -91,6 +91,7 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.equal(createOptions.name, containerName(trajectoryId));
   assert.equal(createOptions.Image, "worker:test");
   assert.equal(createOptions.User, "agent");
+  assert.equal(createOptions.WorkingDir, "/home/agent");
   assert.deepEqual(createOptions.Env, [
     "HOME=/home/agent",
     "GH_PROMPT_DISABLED=1",
@@ -105,8 +106,8 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.equal(hostConfig.NetworkMode, "bridge");
   assert.equal(hostConfig.ReadonlyRootfs, true);
   assert.deepEqual(hostConfig.CapDrop, ["ALL"]);
-  assert.match(hostConfig.Tmpfs?.["/home/agent"] ?? "", /uid=10001/);
-  assert.match(hostConfig.Tmpfs?.["/workspace"] ?? "", /size=1g/);
+  assert.match(hostConfig.Tmpfs?.["/home/agent"] ?? "", /size=10g.*uid=10001/);
+  assert.equal(hostConfig.Tmpfs?.["/workspace"], undefined);
   assert.deepEqual(setupEvents, ["start", "clone"]);
   assert.deepEqual(executions[0]?.Cmd, [
     "git",
@@ -116,8 +117,9 @@ void test("configures, executes in, and archives one isolated container", async 
     "--single-branch",
     "--",
     "https://github.com/example/project.git",
-    "/workspace",
+    "/home/agent/repo",
   ]);
+  assert.equal(executions[0].WorkingDir, "/home/agent");
 
   const result = await sandbox.runCommand(
     trajectoryId,
@@ -130,6 +132,7 @@ void test("configures, executes in, and archives one isolated container", async 
     stderr: "",
     truncated: false,
   });
+  assert.equal(executions[1]?.WorkingDir, "/home/agent/repo");
 
   const credentialedOptions = createOptions;
   const uncredentialedSandbox = new DockerSandbox({
@@ -297,10 +300,11 @@ void test(
 
     const result = await sandbox.runCommand(
       trajectoryId,
-      "git remote get-url origin && git branch --show-current && node --version",
+      "pwd && git remote get-url origin && git branch --show-current && node --version",
       new AbortController().signal,
     );
     assert.equal(result.exitCode, 0);
+    assert.match(result.stdout, /^\/home\/agent\/repo$/m);
     assert.match(
       result.stdout,
       /^https:\/\/github\.com\/octocat\/Hello-World\.git/m,
