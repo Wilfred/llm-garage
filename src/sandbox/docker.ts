@@ -44,7 +44,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
     docker = new Docker(),
     image = defaultWorkerImage,
     githubToken,
-    memoryBytes = 512 * 1024 * 1024,
+    memoryBytes = 4 * 1024 * 1024 * 1024,
     nanoCpus = 1_000_000_000,
     pidsLimit = 128,
     outputLimitBytes = defaultOutputLimit,
