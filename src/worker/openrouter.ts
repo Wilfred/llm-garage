@@ -140,7 +140,6 @@ export type OpenRouterWorkerOptions = {
   apiKey: string | undefined;
   endpoint?: string;
   fetch?: typeof fetch;
-  maxSteps?: number;
   webTools?: WebToolProvider;
 };
 
@@ -148,20 +147,17 @@ export class OpenRouterWorker implements TrajectoryWorker {
   private readonly apiKey: string | undefined;
   private readonly endpoint: string;
   private readonly fetch: typeof fetch;
-  private readonly maxSteps: number;
   private readonly webTools: WebToolProvider | undefined;
 
   constructor({
     apiKey,
     endpoint = defaultEndpoint,
     fetch: fetchImplementation = fetch,
-    maxSteps = 12,
     webTools,
   }: OpenRouterWorkerOptions) {
     this.apiKey = apiKey;
     this.endpoint = endpoint;
     this.fetch = fetchImplementation;
-    this.maxSteps = maxSteps;
     this.webTools = webTools;
   }
 
@@ -173,7 +169,7 @@ export class OpenRouterWorker implements TrajectoryWorker {
     const messages: ProviderMessage[] = context.messages.map((message) => ({
       ...message,
     }));
-    for (let step = 0; step < this.maxSteps; step += 1) {
+    for (;;) {
       const completion = await this.complete(messages, context);
       const message = completion.choices[0]?.message;
       if (!message) throw new Error("OpenRouter returned an empty completion");
@@ -212,10 +208,6 @@ export class OpenRouterWorker implements TrajectoryWorker {
         });
       }
     }
-
-    throw new Error(
-      `OpenRouter worker exceeded its ${this.maxSteps.toString()}-step limit`,
-    );
   }
 
   private async complete(

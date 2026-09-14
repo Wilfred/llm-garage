@@ -265,6 +265,57 @@ void test("runs model-requested shell commands and returns their output", async 
   assert.match(events[2]?.data ?? "", /bin\\nworkspace/);
 });
 
+void test("continues through more than twelve tool steps", async () => {
+  let requests = 0;
+  const worker = new OpenRouterWorker({
+    apiKey: "test-key",
+    fetch: async () => {
+      requests += 1;
+      if (requests === 14) {
+        return Response.json({
+          choices: [{ message: { content: "Finished." } }],
+        });
+      }
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: `call-${requests.toString()}`,
+                  type: "function",
+                  function: {
+                    name: "run_command",
+                    arguments: JSON.stringify({ command: "true" }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      });
+    },
+  });
+  let commands = 0;
+
+  await worker.run({
+    modelId: "openai/gpt-5.6-sol",
+    modelName: "GPT-5.6 Sol",
+    effort: "medium",
+    messages: [{ role: "user", content: "Complete a long task" }],
+    signal: new AbortController().signal,
+    runCommand: async () => {
+      commands += 1;
+      return { exitCode: 0, stdout: "", stderr: "", truncated: false };
+    },
+    emit: () => undefined,
+  });
+
+  assert.equal(requests, 14);
+  assert.equal(commands, 13);
+});
+
 void test("reports OpenRouter API errors", async () => {
   const worker = new OpenRouterWorker({
     apiKey: "test-key",
