@@ -21,6 +21,7 @@ void test("configures, executes in, and archives one isolated container", async 
       return {
         State: { Running: true },
         Config: {
+          Image: createOptions?.Image,
           Env: createOptions?.Env,
           Labels: {
             "com.llm-garage.repository": "example/project",
@@ -89,8 +90,12 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.ok(createOptions);
   assert.equal(createOptions.name, containerName(trajectoryId));
   assert.equal(createOptions.Image, "worker:test");
-  assert.equal(createOptions.User, "65534:65534");
-  assert.deepEqual(createOptions.Env, ["GITHUB_TOKEN=github_pat_test"]);
+  assert.equal(createOptions.User, "agent");
+  assert.deepEqual(createOptions.Env, [
+    "HOME=/home/agent",
+    "GH_PROMPT_DISABLED=1",
+    "GITHUB_TOKEN=github_pat_test",
+  ]);
   assert.equal(
     createOptions.Labels?.["com.llm-garage.trajectory-id"],
     trajectoryId,
@@ -100,6 +105,8 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.equal(hostConfig.NetworkMode, "bridge");
   assert.equal(hostConfig.ReadonlyRootfs, true);
   assert.deepEqual(hostConfig.CapDrop, ["ALL"]);
+  assert.match(hostConfig.Tmpfs?.["/home/agent"] ?? "", /uid=10001/);
+  assert.match(hostConfig.Tmpfs?.["/workspace"] ?? "", /size=1g/);
   assert.deepEqual(setupEvents, ["start", "clone"]);
   assert.deepEqual(executions[0]?.Cmd, [
     "git",
@@ -132,7 +139,10 @@ void test("configures, executes in, and archives one isolated container", async 
   await uncredentialedSandbox.create(trajectoryId, repository);
   assert.ok(createOptions);
   assert.notEqual(createOptions, credentialedOptions);
-  assert.equal(createOptions.Env, undefined);
+  assert.deepEqual(createOptions.Env, [
+    "HOME=/home/agent",
+    "GH_PROMPT_DISABLED=1",
+  ]);
 
   await sandbox.archive(trajectoryId);
   assert.equal(removed, true);
@@ -144,6 +154,7 @@ void test("reconnects an existing worker container to the bridge", async () => {
     inspect: async () => ({
       State: { Running: true },
       Config: {
+        Image: "ghcr.io/wilfred/llm-garage:worker",
         Labels: {
           "com.llm-garage.repository": "example/project",
           "com.llm-garage.default-branch": "main",

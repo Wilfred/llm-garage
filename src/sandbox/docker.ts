@@ -15,6 +15,9 @@ const trajectoryLabel = "com.llm-garage.trajectory-id";
 const repositoryLabel = "com.llm-garage.repository";
 const branchLabel = "com.llm-garage.default-branch";
 const defaultOutputLimit = 64 * 1024;
+const defaultWorkerImage = "ghcr.io/wilfred/llm-garage:worker";
+const workerUser = "agent";
+const workerUid = 10001;
 
 export type DockerSandboxOptions = {
   docker?: Docker;
@@ -39,7 +42,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
 
   constructor({
     docker = new Docker(),
-    image = "node:22-bookworm",
+    image = defaultWorkerImage,
     githubToken,
     memoryBytes = 512 * 1024 * 1024,
     nanoCpus = 1_000_000_000,
@@ -91,6 +94,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
 
     if (
       details?.State.Running &&
+      details.Config.Image === this.image &&
       matchesRepository(details.Config.Labels, repository) &&
       matchesGithubToken(details.Config.Env, this.githubToken)
     ) {
@@ -112,11 +116,13 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         "-c",
         "trap 'exit 0' TERM INT; while :; do sleep 3600 & wait $!; done",
       ],
-      User: "65534:65534",
+      User: workerUser,
       WorkingDir: "/workspace",
-      ...(this.githubToken
-        ? { Env: [`GITHUB_TOKEN=${this.githubToken}`] }
-        : {}),
+      Env: [
+        "HOME=/home/agent",
+        "GH_PROMPT_DISABLED=1",
+        ...(this.githubToken ? [`GITHUB_TOKEN=${this.githubToken}`] : []),
+      ],
       Labels: {
         [managedLabel]: "true",
         [trajectoryLabel]: trajectoryId,
@@ -133,9 +139,9 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         ReadonlyRootfs: true,
         SecurityOpt: ["no-new-privileges:true"],
         Tmpfs: {
+          "/home/agent": `rw,nosuid,nodev,size=256m,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0700`,
           "/tmp": "rw,nosuid,nodev,noexec,size=64m,mode=1777",
-          "/workspace":
-            "rw,nosuid,nodev,size=256m,uid=65534,gid=65534,mode=0750",
+          "/workspace": `rw,nosuid,nodev,size=1g,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0750`,
         },
       },
     });
@@ -166,7 +172,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
-      User: "65534:65534",
+      User: workerUser,
       WorkingDir: "/workspace",
     });
     const stream = await execution.start({ hijack: true, stdin: false });
@@ -210,7 +216,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
-      User: "65534:65534",
+      User: workerUser,
       WorkingDir: "/workspace",
     });
     const stream = await execution.start({ hijack: true, stdin: false });

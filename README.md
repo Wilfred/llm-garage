@@ -55,13 +55,19 @@ Repositories and trajectories are stored in SQLite at `DATA_DIR/app.db`
 (`data/app.db` by default) and survive restarts.
 
 The Docker daemon must be available to the development process. Each trajectory
-gets a container named `llm-garage-trajectory-<id>`, using `node:22-bookworm` by
-default so tools including Git and Node.js are available. Set `WORKER_IMAGE` to
-use another compatible image. Each worker starts with its repository cloned into
-`/workspace`. Worker containers retain network access, run sessions as an
-unprivileged user, and are removed when their trajectory is archived. If
-`GITHUB_TOKEN` is set for the LLM Garage process, it is also available to
-trajectory commands in the container.
+gets a container named `llm-garage-trajectory-<id>`, using the published
+`ghcr.io/wilfred/llm-garage:worker` image by default. The image provides
+Git, GitHub CLI, curl, jq, ripgrep, Python, native build tools, and the current
+Node.js LTS. Set `WORKER_IMAGE` to use another compatible image. Each worker starts
+with its repository cloned into `/workspace`. Worker containers retain network
+access, run sessions as an unprivileged user, and are removed when their trajectory
+is archived. If `GITHUB_TOKEN` is set for the LLM Garage process, it is also
+available to trajectory commands in the container.
+
+The default image runs a named `agent` account with writable home and workspace
+directories. Its system Git configuration supplies the bot identity and uses
+GitHub CLI as the credential helper, so the token can authenticate private clones,
+pushes, and pull-request commands without being embedded in repository URLs.
 
 Workers can fetch public HTTP(S) text and search the web. Web search uses the
 Brave Search API and requires `BRAVE_SEARCH_API_KEY`. The key stays in the LLM
