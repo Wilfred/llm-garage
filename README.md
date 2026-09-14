@@ -58,10 +58,10 @@ The Docker daemon must be available to the development process. Each trajectory
 gets a container named `llm-garage-trajectory-<id>`, using `node:22-bookworm` by
 default so tools including Git and Node.js are available. Set `WORKER_IMAGE` to
 use another compatible image. Each worker starts with its repository cloned into
-`/workspace`. Worker containers only have network access while cloning, run
-sessions without network access as an unprivileged user, and are removed when
-their trajectory is archived. If `GITHUB_TOKEN` is set for the LLM Garage
-process, it is also available to trajectory commands in the container.
+`/workspace`. Worker containers retain network access, run sessions as an
+unprivileged user, and are removed when their trajectory is archived. If
+`GITHUB_TOKEN` is set for the LLM Garage process, it is also available to
+trajectory commands in the container.
 
 Workers can fetch public HTTP(S) text and search the web. Web search uses the
 Brave Search API and requires `BRAVE_SEARCH_API_KEY`. The key stays in the LLM
