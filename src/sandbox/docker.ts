@@ -140,7 +140,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         SecurityOpt: ["no-new-privileges:true"],
         Tmpfs: {
           "/home/agent": `rw,nosuid,nodev,size=256m,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0700`,
-          "/tmp": "rw,nosuid,nodev,noexec,size=64m,mode=1777",
+          "/tmp": "rw,nosuid,nodev,size=64m,mode=1777",
           "/workspace": `rw,nosuid,nodev,size=1g,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0750`,
         },
       },
