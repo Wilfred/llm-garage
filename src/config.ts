@@ -9,7 +9,7 @@ const envSchema = z.object({
   BRAVE_SEARCH_API_KEY: z.string().trim().min(1).optional(),
   GITHUB_TOKEN: z.string().trim().min(1).optional(),
   DOCKER_SOCKET: z.string().min(1).default("/var/run/docker.sock"),
-  WORKER_IMAGE: z.string().min(1).default("node:22-bookworm"),
+  WORKER_IMAGE: z.string().min(1).default("ghcr.io/wilfred/llm-garage:worker"),
 });
 
 export const config = envSchema.parse(process.env);

@@ -105,3 +105,27 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Extract worker image metadata
+        id: worker_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch,prefix=worker-
+            type=ref,event=pr,prefix=worker-
+            type=semver,pattern=worker-{{version}}
+            type=semver,pattern=worker-{{major}}.{{minor}}
+            type=sha,prefix=worker-
+            type=raw,value=worker,enable={{is_default_branch}}
+
+      - name: Build and push worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.worker
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.worker_meta.outputs.tags }}
+          labels: ${{ steps.worker_meta.outputs.labels }}
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
