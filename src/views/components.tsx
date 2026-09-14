@@ -72,7 +72,7 @@ export function TrajectoryCards({
               <span>
                 {repo ? `${repo.owner}/${repo.name}` : "Unknown repository"}
               </span>
-              <span>{model?.name ?? trajectory.modelId} via OpenRouter</span>
+              <span>{model?.name ?? trajectory.modelId}</span>
               <time dateTime={trajectory.updatedAt.toISOString()}>
                 {formatDate(trajectory.updatedAt)}
               </time>

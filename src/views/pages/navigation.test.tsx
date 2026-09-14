@@ -381,7 +381,7 @@ void test("maps internal trajectory states to user-facing states", () => {
   }
 });
 
-void test("identifies each trajectory's model and OpenRouter gateway", () => {
+void test("identifies each trajectory's model", () => {
   const html = renderPage(
     <TrajectoriesPage
       repos={repos}
@@ -390,10 +390,10 @@ void test("identifies each trajectory's model and OpenRouter gateway", () => {
     />,
   );
 
-  assert.match(html, /GPT-5\.6 Sol via OpenRouter/);
-  assert.match(html, /Claude Opus 5 via OpenRouter/);
-  assert.match(html, /Kimi K3 via OpenRouter/);
-  assert.match(html, /GLM 5\.2 via OpenRouter/);
+  assert.match(html, /GPT-5\.6 Sol/);
+  assert.match(html, /Claude Opus 5/);
+  assert.match(html, /Kimi K3/);
+  assert.match(html, /GLM 5\.2/);
 });
 
 void test("shows model output outside the collapsed turn details", () => {
