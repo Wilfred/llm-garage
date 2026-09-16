@@ -190,7 +190,10 @@ void test("lists models sorted alphabetically by name", () => {
     .map((model) => model.name)
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
   const indices = names.map((name) => html.indexOf(name));
-  assert.deepEqual(indices, [...indices].sort((a, b) => a - b));
+  assert.deepEqual(
+    indices,
+    [...indices].sort((a, b) => a - b),
+  );
 });
 
 void test("offers every OpenRouter effort level when adding a model", () => {
