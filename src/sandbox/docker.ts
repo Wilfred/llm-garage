@@ -100,7 +100,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       details.Config.Image === this.image &&
       matchesRepository(details.Config.Labels, repository) &&
       matchesGithubToken(details.Config.Env, this.githubToken) &&
-      allowsExec(details.HostConfig?.Tmpfs)
+      allowsExec(details.HostConfig.Tmpfs)
     ) {
       if (!details.NetworkSettings.Networks["bridge"]) {
         await this.docker.getNetwork("bridge").connect({
