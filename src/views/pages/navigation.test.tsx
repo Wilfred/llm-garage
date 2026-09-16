@@ -167,6 +167,24 @@ void test("lists each model with its provider and effort", () => {
   assert.match(html, /href="\/models\/new"/);
 });
 
+void test("lists models sorted alphabetically by name", () => {
+  const shuffled = [
+    ...models.filter(({ id }) => id === "z-ai/glm-5.2"),
+    ...models.filter(({ id }) => id === "openai/gpt-5.6-sol"),
+    ...models.filter(({ id }) => id === "moonshotai/kimi-k3"),
+    ...models.filter(({ id }) => id === "anthropic/claude-opus-5"),
+  ];
+  const html = renderPage(
+    <ModelsPage models={shuffled} trajectories={trajectories} />,
+  );
+
+  const names = models
+    .map((model) => model.name)
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  const indices = names.map((name) => html.indexOf(name));
+  assert.deepEqual(indices, [...indices].sort((a, b) => a - b));
+});
+
 void test("offers every OpenRouter effort level when adding a model", () => {
   const html = renderPage(<NewModelPage />);
 

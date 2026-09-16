@@ -17,6 +17,9 @@ export function ModelsPage({
   notice?: string;
 }) {
   const success = notice?.startsWith("Added") || notice?.startsWith("Deleted");
+  const sortedModels = [...models].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
   return (
     <Layout title="Models" section="models">
       <div class="page-header">
@@ -45,7 +48,7 @@ export function ModelsPage({
               </tr>
             </thead>
             <tbody>
-              {models.map((model) => (
+              {sortedModels.map((model) => (
                 <tr>
                   <td>
                     <a
