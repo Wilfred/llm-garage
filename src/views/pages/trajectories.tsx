@@ -15,17 +15,23 @@ export function NewTrajectoryPage({
   models,
   selectedRepoId,
   selectedModelIds,
+  defaultRepoId,
+  defaultModelIds,
   error,
 }: {
   repos: Repo[];
   models: Model[];
   selectedRepoId?: string;
   selectedModelIds?: string[];
+  defaultRepoId?: string;
+  defaultModelIds?: string[];
   error?: string;
 }) {
-  const firstModel = models[0];
-  const checkedModelIds =
-    selectedModelIds ?? (firstModel ? [firstModel.id] : []);
+  const checkedModelIds = selectedModelIds ?? defaultModelIds ?? [];
+  const selected =
+    selectedRepoId ??
+    defaultRepoId ??
+    (repos.length === 0 ? undefined : repos[0]?.id);
   return (
     <Layout title="New trajectory" section="trajectories">
       <div class="page-intro">
@@ -54,7 +60,7 @@ export function NewTrajectoryPage({
         <form class="card stack form-card" method="post" action="/trajectories">
           <select name="repoId" required aria-label="Repository">
             {repos.map((repo) => (
-              <option value={repo.id} selected={repo.id === selectedRepoId}>
+              <option value={repo.id} selected={repo.id === selected}>
                 {repo.owner}/{repo.name}
               </option>
             ))}

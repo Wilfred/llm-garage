@@ -4,6 +4,7 @@ import type { DataSource, EntityManager, Repository } from "typeorm";
 import { ModelEntity } from "../entities/model";
 import { RepoEntity } from "../entities/repo";
 import { RunEventEntity } from "../entities/run-event";
+import { Setting } from "../entities/setting";
 import { TrajectoryEntity } from "../entities/trajectory";
 import { TurnEntity } from "../entities/turn";
 import { DisabledSandbox, type Sandbox } from "../sandbox/types";
@@ -47,6 +48,7 @@ export class DatabaseDataStore implements DataStore {
   private readonly trajectoryRepository: Repository<TrajectoryEntity>;
   private readonly turnRepository: Repository<TurnEntity>;
   private readonly eventRepository: Repository<RunEventEntity>;
+  private readonly settingRepository: Repository<Setting>;
   private readonly activeWorkers = new Map<string, AbortController>();
   // The better-sqlite3 driver holds a single connection, so overlapping
   // transactions from concurrent workers would nest and fail.
@@ -70,6 +72,7 @@ export class DatabaseDataStore implements DataStore {
     this.trajectoryRepository = dataSource.getRepository(TrajectoryEntity);
     this.turnRepository = dataSource.getRepository(TurnEntity);
     this.eventRepository = dataSource.getRepository(RunEventEntity);
+    this.settingRepository = dataSource.getRepository(Setting);
     this.worker = worker;
     this.sandbox = sandbox;
     this.seed = seed;
@@ -85,6 +88,15 @@ export class DatabaseDataStore implements DataStore {
         await this.modelRepository.save(createStarterModels());
       }
     }
+  }
+
+  async getSetting(key: string): Promise<string | undefined> {
+    const setting = await this.settingRepository.findOneBy({ key });
+    return setting?.value;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    await this.settingRepository.save({ key, value });
   }
 
   async listModels(): Promise<Model[]> {

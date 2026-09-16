@@ -847,3 +847,37 @@ async function seedModels(store: DataStore): Promise<void> {
     if (!(await store.getModel(input.id))) await store.createModel(input);
   }
 }
+
+void test("persists settings across data source restarts", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-settings-"));
+  let dataSource: DataSource | undefined;
+
+  t.after(async () => {
+    if (dataSource?.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
+  dataSource = createAppDataSource(dataDir);
+  await dataSource.initialize();
+  let store = new DatabaseDataStore(dataSource, { seed: false });
+  await store.initialize();
+  await store.setSetting("lastRepoId", "repo-parser");
+  await store.setSetting(
+    "lastModelIds",
+    JSON.stringify(["openai/gpt-5.6-sol"]),
+  );
+  await dataSource.destroy();
+
+  dataSource = createAppDataSource(dataDir);
+  await dataSource.initialize();
+  store = new DatabaseDataStore(dataSource, { seed: false });
+  await store.initialize();
+
+  assert.equal(await store.getSetting("lastRepoId"), "repo-parser");
+  assert.deepEqual(
+    JSON.parse((await store.getSetting("lastModelIds")) ?? "[]"),
+    ["openai/gpt-5.6-sol"],
+  );
+  assert.equal(await store.getSetting("missing"), undefined);
+  await dataSource.destroy();
+});

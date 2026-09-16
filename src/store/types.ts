@@ -95,10 +95,7 @@ export type UpdateModelInput = Pick<Model, "name" | "provider" | "effort">;
 
 export type DeleteModelResult = "deleted" | "in_use" | "not_found";
 
-export type CreateRepoInput = Pick<
-  Repo,
-  "owner" | "name" | "defaultBranch"
->;
+export type CreateRepoInput = Pick<Repo, "owner" | "name" | "defaultBranch">;
 
 export type CreateTrajectoriesInput = {
   repoId: string;
@@ -125,6 +122,9 @@ export type SpendReport = SpendTotals & {
 };
 
 export interface DataStore {
+  getSetting(key: string): Promise<string | undefined>;
+  setSetting(key: string, value: string): Promise<void>;
+
   listModels(): Promise<Model[]>;
   getModel(id: string): Promise<Model | undefined>;
   createModel(input: CreateModelInput): Promise<Model>;
