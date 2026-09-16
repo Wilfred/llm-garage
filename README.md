@@ -7,36 +7,34 @@ models to build intuition of their abilities.
 Ultimately it spawns agentic trajectories on the current host using
 Docker.
 
-## Target Feature Set
+Loosely inspired by Claude Code Web and
+[OpenHands](https://github.com/All-Hands-AI/OpenHands)
 
-(1) Create a pull request for a given GitHub repository, prompt and
-model, similar to Claude Code Web or
-[OpenHands](https://github.com/All-Hands-AI/OpenHands).
+## Current Features
 
-(2) Trajectory tracking: For each trajectory, full metadata of prompts,
-output, tool usage, token usage, time taken and cost. Allow trajectories
-to be marked public to show to others.
+* Clone a GitHub repository, have an agent make changes, and create a
+  PR (for coding tasks).
+* View the full details of the agent's trajectory and cost (for
+  understanding agent behaviours).
+* Spawn multiple trajectories for the same prompt (for A/B comparing
+  models).
 
-(3) Trajectory feedback: mark which trajectory you think had the best
-result, so you can generate a summary of which model is best for your
-use cases.
+## Planned Features
 
-(4) Side-by-side trajectories: Allow multiple linked trajectories to start
-with the same prompt, to make A/B testing models easy.
+* Allow trajectories to be made public to share with others.
+* Mark which trajectory you like the most, so you can accumulate data
+  on your favourite models.
+* Auto merging: Allow repositories to opt-in to auto merging accepted PRs once
+  CI is green.
+* Spawn trajectory tool: Allow an agent to start an additional
+  trajectory, so the user can fork work.
 
-(5) Drive-by trajectories: Allow a repository to opt in to auto-merging
-the pull requests its trajectories open, once CI is green.
+## Tools
 
-(6) Spawned trajectories: Allow an active agent to create a durable child
-trajectory for related work that cannot be handled by a short-lived
-subagent. The parent link records provenance; this is not intended to
-be a general user-curated trajectory tree.
-
-**Status: clickable prototype.** The dashboard, repository workflow, and
-OpenRouter-backed multi-turn trajectory flow with isolated Docker commands and
-host-side web tools are available now. Repository checkout and GitHub integration
-arrive in later milestones. See [PLAN.md](PLAN.md) for the full design and milestone
-roadmap.
+* Run Linux commands in a Docker container
+* Fetch web pages
+* Search the web (using the Brave API)
+* Set the name of the current trajectory
 
 ## Development
 
@@ -51,51 +49,14 @@ npm run dev            # tsx watch, http://127.0.0.1:3000
 - `npm test` — unit tests
 - `npm run format` — prettier
 
-Repositories and trajectories are stored in SQLite at `DATA_DIR/app.db`
-(`data/app.db` by default) and survive restarts.
+Repositories and trajectories are stored in SQLite at
+`DATA_DIR/app.db` (`data/app.db` by default).
 
-The Docker daemon must be available to the development process. Each trajectory
-gets a container named `llm-garage-trajectory-<id>`, using the published
-`ghcr.io/wilfred/llm-garage:worker` image by default. The Ubuntu 26.04-based image
-provides Git, GitHub CLI, curl, jq, ripgrep, Python with pip, Rust with Cargo, the
-Docker CLI, CMake, native build tools, and Node.js 22. Set `WORKER_IMAGE` to use
-another compatible image. Each worker starts with its repository cloned into
-`/home/agent/repo`. Worker containers retain network access, run sessions as an
-unprivileged user, and are removed when their trajectory is archived. If
-`GITHUB_TOKEN` is set for the LLM Garage process, it is also available to
-trajectory commands in the container.
+## Security
 
-The default image runs a named `agent` account with a writable 10 GiB home
-directory containing the repository. Its system Git configuration supplies the
-bot identity and uses GitHub CLI as the credential helper, so the token can
-authenticate private clones, pushes, and pull-request commands without being
-embedded in repository URLs.
+Each session gets a Docker container to work inside, with a memory
+limit and disk storage limit. Its only external permissions are the
+GitHub token provided
 
-Workers can fetch public HTTP(S) text and search the web. Web search uses the
-Brave Search API and requires `BRAVE_SEARCH_API_KEY`. The key stays in the LLM
-Garage process and is not passed to worker containers or recorded in trajectory
-events. URL fetching blocks private and local network targets and limits response
-size, redirects, and duration.
-
-## Docker
-
-```sh
-docker build -t llm-garage .
-docker volume create llm-garage-data
-docker run -d --name llm-garage --restart unless-stopped \
-  -p 3000:3000 \
-  --env-file .env \
-  -e HOST=0.0.0.0 \
-  --group-add "$(stat -c '%g' /var/run/docker.sock)" \
-  --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock \
-  --mount source=llm-garage-data,target=/app/data \
-  llm-garage
-```
-
-The named volume is required: it stores the SQLite database outside the container so
-repository data survives container replacement. Reuse `llm-garage-data` when deploying
-a new image, and include that volume in host backups.
-
-Mounting the Docker socket gives LLM Garage control of the host Docker daemon.
-Only expose it to a trusted deployment. The first trajectory pulls the configured
-worker image if it is not already present.
+I run this on a VM that isn't running anything else, using a separate
+GitHub account.
