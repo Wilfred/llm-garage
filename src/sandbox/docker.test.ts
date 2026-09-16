@@ -190,6 +190,12 @@ void test("reconnects an existing worker container to the bridge", async () => {
           "com.llm-garage.default-branch": "main",
         },
       },
+      HostConfig: {
+        Tmpfs: {
+          "/home/agent": "exec,nosuid,nodev",
+          "/tmp": "exec,nosuid,nodev,size=2g",
+        },
+      },
       NetworkSettings: { Networks: {} },
     }),
   };
