@@ -41,10 +41,19 @@ export function createTrajectoriesRouter(store: DataStore): Router {
   });
 
   router.get("/trajectories/new", async (req, res) => {
-    const [repos, models] = await Promise.all([
+    const [repos, models, lastRepoId, lastModelIds] = await Promise.all([
       store.listRepos(),
       store.listModels(),
+      store.getSetting("lastRepoId"),
+      store.getSetting("lastModelIds"),
     ]);
+    const lastModels = parseJsonArray(lastModelIds).filter(
+      (id): id is string => typeof id === "string",
+    );
+    const defaultRepoId = validId(repos, lastRepoId);
+    const defaultModelIds = Array.isArray(lastModels)
+      ? lastModels.filter((id) => models.some((model) => model.id === id))
+      : undefined;
     const selectedRepoId = queryString(req.query["repoId"]);
     res
       .type("html")
@@ -54,6 +63,10 @@ export function createTrajectoriesRouter(store: DataStore): Router {
             repos={repos}
             models={models}
             {...(selectedRepoId === undefined ? {} : { selectedRepoId })}
+            {...(defaultRepoId === undefined ? {} : { defaultRepoId })}
+            {...(defaultModelIds === undefined || defaultModelIds.length === 0
+              ? {}
+              : { defaultModelIds })}
           />,
         ),
       );
@@ -87,6 +100,10 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         );
       return;
     }
+    await Promise.all([
+      store.setSetting("lastRepoId", repoId),
+      store.setSetting("lastModelIds", JSON.stringify(modelIds)),
+    ]);
     const [trajectory] = await store.createTrajectories({
       repoId,
       title: titleFromTask(taskPrompt),
@@ -182,6 +199,25 @@ export function createTrajectoriesRouter(store: DataStore): Router {
   });
 
   return router;
+}
+
+function parseJsonArray(value: string | undefined): unknown[] {
+  if (value === undefined) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function validId(
+  entries: Array<{ id: string }>,
+  id: string | undefined,
+): string | undefined {
+  return id !== undefined && entries.some((entry) => entry.id === id)
+    ? id
+    : undefined;
 }
 
 async function loadTranscript(
