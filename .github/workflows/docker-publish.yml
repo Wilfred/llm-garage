@@ -1,7 +1,8 @@
-name: CI and publish Docker image
+name: CI & Publish
 
-# Builds the Dockerfile and publishes the image to the GitHub Container
-# Registry (GHCR) so it can be deployed.
+# Runs linting, type-checking, testing and formatting as independent,
+# parallel jobs, then builds the Dockerfile and publishes the image to the
+# GitHub Container Registry (GHCR) so it can be deployed.
 #
 # Pull the published image with:
 #   docker pull ghcr.io/wilfred/llm-garage:latest
@@ -26,7 +27,20 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [lint, typecheck, test, format]
+        include:
+          - check: lint
+            script: lint
+          - check: typecheck
+            script: typecheck
+          - check: test
+            script: test
+          - check: format
+            script: format:check
+    name: ${{ matrix.check }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -40,14 +54,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Type-check
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
+      - name: ${{ matrix.check }}
+        run: npm run ${{ matrix.script }}
 
   build-and-push:
     needs: quality

@@ -12,29 +12,29 @@ Loosely inspired by Claude Code Web and
 
 ## Current Features
 
-* Clone a GitHub repository, have an agent make changes, and create a
+- Clone a GitHub repository, have an agent make changes, and create a
   PR (for coding tasks).
-* View the full details of the agent's trajectory and cost (for
+- View the full details of the agent's trajectory and cost (for
   understanding agent behaviours).
-* Spawn multiple trajectories for the same prompt (for A/B comparing
+- Spawn multiple trajectories for the same prompt (for A/B comparing
   models).
 
 ## Planned Features
 
-* Allow trajectories to be made public to share with others.
-* Mark which trajectory you like the most, so you can accumulate data
+- Allow trajectories to be made public to share with others.
+- Mark which trajectory you like the most, so you can accumulate data
   on your favourite models.
-* Auto merging: Allow repositories to opt-in to auto merging accepted PRs once
+- Auto merging: Allow repositories to opt-in to auto merging accepted PRs once
   CI is green.
-* Spawn trajectory tool: Allow an agent to start an additional
+- Spawn trajectory tool: Allow an agent to start an additional
   trajectory, so the user can fork work.
 
 ## Tools
 
-* Run Linux commands in a Docker container
-* Fetch web pages
-* Search the web (using the Brave API)
-* Set the name of the current trajectory
+- Run Linux commands in a Docker container
+- Fetch web pages
+- Search the web (using the Brave API)
+- Set the name of the current trajectory
 
 ## Development
 

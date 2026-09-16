@@ -359,9 +359,7 @@ function matchesRepository(
   );
 }
 
-function allowsExec(
-  tmpfs: Record<string, string> | undefined,
-): boolean {
+function allowsExec(tmpfs: Record<string, string> | undefined): boolean {
   return Object.values(tmpfs ?? {}).every((options) =>
     options.split(",").includes("exec"),
   );
