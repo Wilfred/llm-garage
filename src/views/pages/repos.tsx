@@ -16,7 +16,7 @@ export function ReposPage({
 }) {
   const success = notice?.startsWith("Added") || notice?.startsWith("Deleted");
   return (
-    <Layout title="Repositories" section="repos">
+    <Layout title="Repositories" section="settings">
       <div class="page-header">
         <h1>Repositories</h1>
         <a class="button button-primary" href="/repos/new">
@@ -74,7 +74,7 @@ export function ReposPage({
 
 export function NewRepoPage({ error }: { error?: string }) {
   return (
-    <Layout title="Add repository" section="repos">
+    <Layout title="Add repository" section="settings">
       <div class="breadcrumb">
         <a href="/repos">Repositories</a>
         <span>/</span>
@@ -130,7 +130,7 @@ export function RepoDetailPage({
   const activeCount = trajectories.filter(isActive).length;
   const trajectoriesUrl = `/trajectories?repoId=${encodeURIComponent(repo.id)}`;
   return (
-    <Layout title={`${repo.owner}/${repo.name}`} section="repos">
+    <Layout title={`${repo.owner}/${repo.name}`} section="settings">
       <div class="breadcrumb">
         <a href="/repos">Repositories</a>
         <span>/</span>

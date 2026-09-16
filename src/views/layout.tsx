@@ -1,18 +1,15 @@
 import type { ComponentChildren } from "preact";
 
-export type NavigationSection =
-  "containers" | "models" | "repos" | "trajectories" | "spend";
+export type NavigationSection = "settings" | "trajectories" | "spend";
 
 const navItems: Array<{
   href: string;
   label: string;
   section: NavigationSection;
 }> = [
-  { href: "/repos", label: "Repositories", section: "repos" },
   { href: "/trajectories", label: "Trajectories", section: "trajectories" },
-  { href: "/containers", label: "Containers", section: "containers" },
-  { href: "/models", label: "Models", section: "models" },
   { href: "/spend", label: "Spend", section: "spend" },
+  { href: "/settings", label: "Settings", section: "settings" },
 ];
 
 export function Layout({

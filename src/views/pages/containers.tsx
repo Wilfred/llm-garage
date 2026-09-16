@@ -17,7 +17,7 @@ export function ContainersPage({
   ).length;
 
   return (
-    <Layout title="Containers" section="containers">
+    <Layout title="Containers" section="settings">
       <div class="page-header">
         <div class="page-heading">
           <h1>Containers</h1>

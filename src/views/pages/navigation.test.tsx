@@ -20,6 +20,7 @@ import {
 import { ComparisonPage, type ComparisonColumn } from "./comparisons";
 import { ContainersPage } from "./containers";
 import { SpendPage } from "./spend";
+import { SettingsPage } from "./settings";
 
 const repos = createStarterRepos(new Date("2026-09-06T12:00:00Z").getTime());
 const models = createStarterModels(new Date("2026-09-06T12:00:00Z").getTime());
@@ -60,12 +61,19 @@ void test("renders the primary navigation", () => {
   );
 
   assert.match(html, /🛠️/u);
-  assert.match(html, /href="\/repos"/);
   assert.match(html, /href="\/trajectories"/);
-  assert.match(html, /href="\/containers"/);
-  assert.match(html, /href="\/models"/);
   assert.match(html, /href="\/spend"/);
+  assert.match(html, /href="\/settings"/);
+  assert.doesNotMatch(html, /href="\/(?:repos|containers|models)"/);
   assert.equal(html.match(/href="\/trajectories\/new"/g)?.length, 1);
+});
+
+void test("links resource settings from the settings page", () => {
+  const html = renderPage(<SettingsPage />);
+
+  assert.match(html, /aria-current="page">Settings<\/a>/);
+  for (const resource of ["repos", "containers", "models"])
+    assert.match(html, new RegExp(`href="/${resource}"`));
 });
 
 void test("lists managed containers with bulk removal actions", () => {
@@ -95,7 +103,7 @@ void test("lists managed containers with bulk removal actions", () => {
     />,
   );
 
-  assert.match(html, /aria-current="page">Containers<\/a>/);
+  assert.match(html, /aria-current="page">Settings<\/a>/);
   assert.match(html, /action="\/containers\/remove-idle"/);
   assert.match(html, /action="\/containers\/remove-all"/);
   assert.match(html, /status-active">active<\/span>/);
