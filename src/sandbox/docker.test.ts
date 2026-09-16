@@ -114,6 +114,9 @@ void test("configures, executes in, and archives one isolated container", async 
   assert.equal(hostConfig.ReadonlyRootfs, true);
   assert.deepEqual(hostConfig.CapDrop, ["ALL"]);
   assert.match(hostConfig.Tmpfs?.["/home/agent"] ?? "", /size=10g.*uid=10001/);
+  assert.match(hostConfig.Tmpfs?.["/home/agent"] ?? "", /(^|,)exec(,|$)/);
+  assert.match(hostConfig.Tmpfs?.["/tmp"] ?? "", /(^|,)exec(,|$)/);
+  assert.match(hostConfig.Tmpfs?.["/tmp"] ?? "", /size=2g/);
   assert.equal(hostConfig.Tmpfs?.["/workspace"], undefined);
   assert.deepEqual(setupEvents, ["start", "clone"]);
   assert.deepEqual(executions[0]?.Cmd, [
@@ -185,6 +188,12 @@ void test("reconnects an existing worker container to the bridge", async () => {
         Labels: {
           "com.llm-garage.repository": "example/project",
           "com.llm-garage.default-branch": "main",
+        },
+      },
+      HostConfig: {
+        Tmpfs: {
+          "/home/agent": "exec,nosuid,nodev",
+          "/tmp": "exec,nosuid,nodev,size=2g",
         },
       },
       NetworkSettings: { Networks: {} },

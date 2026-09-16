@@ -99,7 +99,8 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       details?.State.Running &&
       details.Config.Image === this.image &&
       matchesRepository(details.Config.Labels, repository) &&
-      matchesGithubToken(details.Config.Env, this.githubToken)
+      matchesGithubToken(details.Config.Env, this.githubToken) &&
+      allowsExec(details.HostConfig.Tmpfs)
     ) {
       if (!details.NetworkSettings.Networks["bridge"]) {
         await this.docker.getNetwork("bridge").connect({
@@ -142,8 +143,8 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         ReadonlyRootfs: true,
         SecurityOpt: ["no-new-privileges:true"],
         Tmpfs: {
-          [workerHome]: `rw,nosuid,nodev,size=10g,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0700`,
-          "/tmp": "rw,nosuid,nodev,size=64m,mode=1777",
+          [workerHome]: `rw,nosuid,nodev,exec,size=10g,uid=${workerUid.toString()},gid=${workerUid.toString()},mode=0700`,
+          "/tmp": "rw,nosuid,nodev,exec,size=2g,mode=1777",
         },
       },
     });
@@ -355,6 +356,14 @@ function matchesRepository(
   return (
     labels?.[repositoryLabel] === `${repository.owner}/${repository.name}` &&
     labels[branchLabel] === repository.defaultBranch
+  );
+}
+
+function allowsExec(
+  tmpfs: Record<string, string> | undefined,
+): boolean {
+  return Object.values(tmpfs ?? {}).every((options) =>
+    options.split(",").includes("exec"),
   );
 }
 
