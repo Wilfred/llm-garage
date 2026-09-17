@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { formatUsage, type TokenUsage } from "../usage";
-import type { TrajectoryWorker, WorkerContext } from "./types";
+import type { GarageSettings, TrajectoryWorker, WorkerContext } from "./types";
 import type { WebToolProvider } from "./web-tools";
 
 const defaultEndpoint = "https://openrouter.ai/api/v1/chat/completions";
@@ -58,6 +58,8 @@ const fetchUrlArgumentsSchema = z.object({
   url: z.url().max(2048),
 });
 
+const garageSettingsArgumentsSchema = z.object({});
+
 const searchWebArgumentsSchema = z.object({
   query: z
     .string()
@@ -86,6 +88,20 @@ const tools = [
           },
         },
         required: ["name"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "garage_settings",
+      description:
+        "See the models and repositories configured in this LLM Garage instance.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
         additionalProperties: false,
       },
     },
@@ -316,6 +332,26 @@ export class OpenRouterWorker implements TrajectoryWorker {
             await setTrajectoryName(parsed.data.name);
             return { name: parsed.data.name };
           },
+        );
+      }
+      case "garage_settings": {
+        const parsed = garageSettingsArgumentsSchema.safeParse(rawArguments);
+        if (!parsed.success) {
+          return JSON.stringify({
+            error: "Invalid garage_settings arguments",
+          });
+        }
+        const garageSettings = context.garageSettings;
+        if (!garageSettings) {
+          return JSON.stringify({
+            error: "Garage settings are not configured",
+          });
+        }
+        return this.executeTool(
+          "garage_settings",
+          parsed.data,
+          context,
+          async (): Promise<GarageSettings> => garageSettings(),
         );
       }
       case "run_command": {

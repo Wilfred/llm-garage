@@ -11,6 +11,11 @@ export type ConversationMessage = {
   content: string;
 };
 
+export type GarageSettings = {
+  models: Array<{ id: string; name: string; effort: string }>;
+  repos: Array<{ owner: string; name: string; defaultBranch: string }>;
+};
+
 export type WorkerContext = {
   modelId: string;
   modelName: string;
@@ -20,6 +25,7 @@ export type WorkerContext = {
   emit: (event: WorkerEvent) => void;
   runCommand?: (command: string) => Promise<CommandResult>;
   setTrajectoryName?: (name: string) => Promise<void>;
+  garageSettings?: () => Promise<GarageSettings>;
 };
 
 export interface TrajectoryWorker {

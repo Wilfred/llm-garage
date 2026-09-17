@@ -35,6 +35,7 @@ Loosely inspired by Claude Code Web and
 - Fetch web pages
 - Search the web (using the Brave API)
 - Set the name of the current trajectory
+- See the models and repos configured in this instance
 
 ## Development
 

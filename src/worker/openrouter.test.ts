@@ -76,7 +76,13 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
     (body as { tools: Array<{ function: { name: string } }> }).tools.map(
       (tool) => tool.function.name,
     ),
-    ["set_trajectory_name", "run_command", "fetch_url", "search_web"],
+    [
+      "set_trajectory_name",
+      "garage_settings",
+      "run_command",
+      "fetch_url",
+      "search_web",
+    ],
   );
   assert.deepEqual((body as { reasoning: unknown }).reasoning, {
     effort: "medium",
@@ -374,4 +380,66 @@ void test("requires an API key before making a request", async () => {
     /OPENROUTER_API_KEY is not configured/,
   );
   assert.equal(called, false);
+});
+
+void test("reports garage settings when requested by the model", async () => {
+  const responses = [
+    {
+      choices: [
+        {
+          message: {
+            content: null,
+            tool_calls: [
+              {
+                id: "settings-1",
+                type: "function",
+                function: {
+                  name: "garage_settings",
+                  arguments: "{}",
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    { choices: [{ message: { content: "Settings reported." } }] },
+  ];
+  const requests: unknown[] = [];
+  const worker = new OpenRouterWorker({
+    apiKey: "test-key",
+    fetch: async (_input, init) => {
+      requests.push(JSON.parse(init?.body as string));
+      return Response.json(responses.shift());
+    },
+  });
+
+  await worker.run({
+    modelId: "openai/gpt-5.6-sol",
+    modelName: "GPT-5.6 Sol",
+    effort: "medium",
+    messages: [{ role: "user", content: "What models are configured?" }],
+    signal: new AbortController().signal,
+    garageSettings: async () => ({
+      models: [
+        { id: "openai/gpt-5.6-sol", name: "GPT-5.6 Sol", effort: "medium" },
+      ],
+      repos: [{ owner: "example", name: "demo", defaultBranch: "main" }],
+    }),
+    emit: () => undefined,
+  });
+
+  const followUp = requests[1] as {
+    messages: Array<{ role: string; tool_call_id?: string; content: string }>;
+  };
+  assert.deepEqual(followUp.messages.at(-1), {
+    role: "tool",
+    tool_call_id: "settings-1",
+    content: JSON.stringify({
+      models: [
+        { id: "openai/gpt-5.6-sol", name: "GPT-5.6 Sol", effort: "medium" },
+      ],
+      repos: [{ owner: "example", name: "demo", defaultBranch: "main" }],
+    }),
+  });
 });
