@@ -19,6 +19,11 @@ export type ConversationMessage =
   | { role: "assistant"; content: string | null; tool_calls: ToolCall[] }
   | { role: "tool"; tool_call_id: string; content: string };
 
+export type GarageSettings = {
+  models: Array<{ id: string; name: string; effort: string }>;
+  repos: Array<{ owner: string; name: string; defaultBranch: string }>;
+};
+
 export type WorkerContext = {
   modelId: string;
   modelName: string;
@@ -29,6 +34,7 @@ export type WorkerContext = {
   appendMessage: (message: ConversationMessage) => void;
   runCommand?: (command: string) => Promise<CommandResult>;
   setTrajectoryName?: (name: string) => Promise<void>;
+  garageSettings?: () => Promise<GarageSettings>;
 };
 
 export interface TrajectoryWorker {
