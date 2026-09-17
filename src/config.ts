@@ -10,6 +10,7 @@ const envSchema = z.object({
   GITHUB_TOKEN: z.string().trim().min(1).optional(),
   DOCKER_SOCKET: z.string().min(1).default("/var/run/docker.sock"),
   WORKER_IMAGE: z.string().min(1).default("ghcr.io/wilfred/llm-garage:worker"),
+  MAX_RUNNING_TRAJECTORIES: z.coerce.number().int().positive().default(2),
 });
 
 export const config = envSchema.parse(process.env);

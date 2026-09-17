@@ -348,7 +348,11 @@ void test("commits cancellation state and its event together", async (t) => {
   assert.ok(turn);
   assert.deepEqual(
     (await store.listRunEvents(turn.id)).map(({ data }) => data),
-    ["GPT-5.6 Sol started", "Trajectory cancelled by user"],
+    [
+      "GPT-5.6 Sol queued",
+      "GPT-5.6 Sol started",
+      "Trajectory cancelled by user",
+    ],
   );
 });
 
@@ -617,8 +621,9 @@ void test("persists worker failures and their terminal events", async (t) => {
     })),
     [
       { kind: "status", sequence: 1 },
-      { kind: "system", sequence: 2 },
-      { kind: "status", sequence: 3 },
+      { kind: "status", sequence: 2 },
+      { kind: "system", sequence: 3 },
+      { kind: "status", sequence: 4 },
     ],
   );
 });
@@ -880,4 +885,167 @@ void test("persists settings across data source restarts", async (t) => {
   );
   assert.equal(await store.getSetting("missing"), undefined);
   await dataSource.destroy();
+});
+
+void test("runs at most the configured number of trajectories at once", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-cap-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+
+  const started: string[] = [];
+  const release = new Map<string, () => void>();
+  const modelIds = [
+    "openai/gpt-5.6-sol",
+    "anthropic/claude-opus-5",
+    "moonshotai/kimi-k3",
+    "z-ai/glm-5.2",
+  ];
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    maxRunning: 2,
+    worker: {
+      run: async (context) => {
+        started.push(context.modelId);
+        await new Promise<void>((resolve) =>
+          release.set(context.modelId, resolve),
+        );
+      },
+    },
+  });
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "capped-project",
+    defaultBranch: "main",
+  });
+
+  const trajectories = await store.createTrajectories({
+    repoId: repo.id,
+    title: "Capped comparison",
+    modelIds,
+    taskPrompt: "Exercise the worker cap",
+  });
+  assert.equal(trajectories.length, 4);
+  for (const trajectory of trajectories)
+    assert.equal(trajectory.status, "queued");
+
+  await waitForStatus(store, trajectories[0]?.id ?? "", "running");
+  await waitForStatus(store, trajectories[1]?.id ?? "", "running");
+  await delay(50);
+  assert.deepEqual(started, modelIds.slice(0, 2));
+  for (const trajectory of trajectories.slice(2)) {
+    assert.equal((await store.getTrajectory(trajectory.id))?.status, "queued");
+  }
+
+  // Each freed slot admits the trajectory that has waited longest.
+  release.get(modelIds[0] ?? "")?.();
+  await waitForStatus(store, trajectories[2]?.id ?? "", "running");
+  await delay(50);
+  assert.deepEqual(started, modelIds.slice(0, 3));
+  assert.equal(
+    (await store.getTrajectory(trajectories[3]?.id ?? ""))?.status,
+    "queued",
+  );
+
+  release.get(modelIds[1] ?? "")?.();
+  await waitForStatus(store, trajectories[3]?.id ?? "", "running");
+  assert.deepEqual(started, modelIds);
+  for (const resolve of release.values()) resolve();
+});
+
+void test("re-queues trajectories that were still waiting at restart", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-requeue-"));
+  let dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+
+  const blocked = new DatabaseDataStore(dataSource, {
+    seed: false,
+    maxRunning: 1,
+    worker: { run: () => new Promise<void>(() => undefined) },
+  });
+  await seedModels(blocked);
+  const repo = await blocked.createRepo({
+    owner: "example",
+    name: "requeue-project",
+    defaultBranch: "main",
+  });
+  const [running, waiting] = await blocked.createTrajectories({
+    repoId: repo.id,
+    title: "Restart while queued",
+    modelIds: ["openai/gpt-5.6-sol", "anthropic/claude-opus-5"],
+    taskPrompt: "Exercise restart recovery",
+  });
+  assert.ok(running && waiting);
+  await waitForStatus(blocked, running.id, "running");
+  assert.equal((await blocked.getTrajectory(waiting.id))?.status, "queued");
+
+  await dataSource.destroy();
+  dataSource = createAppDataSource(dataDir);
+  await dataSource.initialize();
+  const restarted = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: { run: async () => undefined },
+  });
+  await restarted.initialize();
+
+  // The interrupted trajectory cannot continue, but the queued one never
+  // started and so runs to completion.
+  assert.equal((await restarted.getTrajectory(running.id))?.status, "failed");
+  await waitForStatus(restarted, waiting.id, "succeeded");
+});
+
+void test("drops a queued trajectory from the queue when it is cancelled", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-unqueue-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+
+  let runs = 0;
+  let unblock = (): void => undefined;
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    maxRunning: 1,
+    worker: {
+      run: async () => {
+        runs += 1;
+        await new Promise<void>((resolve) => {
+          unblock = resolve;
+        });
+      },
+    },
+  });
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "unqueue-project",
+    defaultBranch: "main",
+  });
+  const [running, waiting] = await store.createTrajectories({
+    repoId: repo.id,
+    title: "Cancel while queued",
+    modelIds: ["openai/gpt-5.6-sol", "anthropic/claude-opus-5"],
+    taskPrompt: "Exercise cancelling a queued trajectory",
+  });
+  assert.ok(running && waiting);
+  await waitForStatus(store, running.id, "running");
+
+  assert.equal(await store.cancelTrajectory(waiting.id), true);
+  assert.equal((await store.getTrajectory(waiting.id))?.status, "cancelled");
+
+  unblock();
+  await waitForStatus(store, running.id, "succeeded");
+  await delay(50);
+  assert.equal(runs, 1);
+  assert.equal((await store.getTrajectory(waiting.id))?.status, "cancelled");
 });
