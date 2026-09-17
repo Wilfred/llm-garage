@@ -5,7 +5,6 @@ export type Model = {
   // The OpenRouter model slug, such as "anthropic/claude-opus-5".
   id: string;
   name: string;
-  provider: string;
   effort: ModelEffort;
   createdAt: Date;
 };
@@ -86,12 +85,9 @@ export type RunEvent = {
   ts: Date;
 };
 
-export type CreateModelInput = Pick<
-  Model,
-  "id" | "name" | "provider" | "effort"
->;
+export type CreateModelInput = Pick<Model, "id" | "name" | "effort">;
 
-export type UpdateModelInput = Pick<Model, "name" | "provider" | "effort">;
+export type UpdateModelInput = Pick<Model, "name" | "effort">;
 
 export type DeleteModelResult = "deleted" | "in_use" | "not_found";
 

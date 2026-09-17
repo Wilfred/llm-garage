@@ -89,14 +89,12 @@ void test("persists model CRUD and keeps models used by trajectories", async (t)
   const created = await store.createModel({
     id: "deepseek/deepseek-r2",
     name: "DeepSeek R2",
-    provider: "DeepSeek",
     effort: "high",
   });
   await assert.rejects(
     store.createModel({
       id: created.id,
       name: "Duplicate",
-      provider: "DeepSeek",
       effort: "low",
     }),
     ModelAlreadyExistsError,
@@ -111,7 +109,6 @@ void test("persists model CRUD and keeps models used by trajectories", async (t)
   assert.deepEqual(await store.getModel(created.id), created);
   const updated = await store.updateModel(created.id, {
     name: "DeepSeek R2 Turbo",
-    provider: "DeepSeek",
     effort: "low",
   });
   assert.ok(updated);
@@ -121,7 +118,6 @@ void test("persists model CRUD and keeps models used by trajectories", async (t)
   assert.equal(
     await store.updateModel("nobody/nothing", {
       name: "Nothing",
-      provider: "Nobody",
       effort: "low",
     }),
     undefined,
