@@ -10,9 +10,6 @@ export class ModelEntity {
   @Column("text")
   name!: string;
 
-  @Column("text")
-  provider!: string;
-
   @Column("simple-enum", { enum: modelEfforts })
   effort!: ModelEffort;
 

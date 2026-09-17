@@ -158,7 +158,7 @@ void test("renders repository links and trajectory counts", () => {
   }
 });
 
-void test("lists each model with its provider and effort", () => {
+void test("lists each model with its name and effort", () => {
   const html = renderPage(
     <ModelsPage models={models} trajectories={trajectories} />,
   );
@@ -169,7 +169,6 @@ void test("lists each model with its provider and effort", () => {
       new RegExp(`href="/models/${model.id.replace("/", "%2F")}"`),
     );
     assert.match(html, new RegExp(model.name));
-    assert.match(html, new RegExp(model.provider));
   }
   assert.match(html, /<td>medium<\/td>/);
   assert.match(html, /href="\/models\/new"/);

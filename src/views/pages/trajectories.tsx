@@ -74,7 +74,7 @@ export function NewTrajectoryPage({
                   value={model.id}
                   checked={checkedModelIds.includes(model.id)}
                 />
-                {model.name} · {model.provider} · {model.effort} effort
+                {model.name} · {model.effort} effort
               </label>
             ))}
           </div>

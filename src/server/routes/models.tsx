@@ -40,24 +40,23 @@ export function createModelsRouter(store: DataStore): Router {
   router.post("/models", async (req, res) => {
     const id = formField(req.body, "id");
     const name = formField(req.body, "name");
-    const provider = formField(req.body, "provider");
     const effort = formField(req.body, "effort");
-    if (!id || !name || !provider || !isModelEffort(effort)) {
+    if (!id || !name || !isModelEffort(effort)) {
       res
         .status(400)
         .type("html")
         .send(
           renderPage(
             <NewModelPage
-              values={{ id, name, provider, effort }}
-              error="Model id, name, provider, and effort are required."
+              values={{ id, name, effort }}
+              error="Model id, name, and effort are required."
             />,
           ),
         );
       return;
     }
     try {
-      await store.createModel({ id, name, provider, effort });
+      await store.createModel({ id, name, effort });
     } catch (error) {
       if (!(error instanceof ModelAlreadyExistsError)) throw error;
       res
@@ -66,7 +65,7 @@ export function createModelsRouter(store: DataStore): Router {
         .send(
           renderPage(
             <NewModelPage
-              values={{ id, name, provider, effort }}
+              values={{ id, name, effort }}
               error={error.message}
             />,
           ),
@@ -108,19 +107,14 @@ export function createModelsRouter(store: DataStore): Router {
 
   router.post("/models/:id", async (req, res) => {
     const name = formField(req.body, "name");
-    const provider = formField(req.body, "provider");
     const effort = formField(req.body, "effort");
     const path = `/models/${encodeURIComponent(req.params.id)}`;
-    if (!name || !provider || !isModelEffort(effort)) {
-      res.redirect(
-        303,
-        noticeUrl(path, "Name, provider, and effort are required."),
-      );
+    if (!name || !isModelEffort(effort)) {
+      res.redirect(303, noticeUrl(path, "Name and effort are required."));
       return;
     }
     const updated = await store.updateModel(req.params.id, {
       name,
-      provider,
       effort,
     });
     res.redirect(303, noticeUrl(path, updated ? "Saved." : "Model not found."));
