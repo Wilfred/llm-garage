@@ -98,9 +98,11 @@ export type TurnTranscript = { turn: Turn; events: RunEvent[] };
 export function TrajectoryDetailPage({
   trajectory,
   transcript,
+  model,
 }: {
   trajectory: Trajectory;
   transcript: TurnTranscript[];
+  model?: Model;
 }) {
   const canContinue =
     trajectory.status !== "running" &&
@@ -128,6 +130,9 @@ export function TrajectoryDetailPage({
       </div>
       <div class="detail-toolbar">
         <StatusBadge status={trajectory.status} />
+        <span class="detail-model muted">
+          {model?.name ?? trajectory.modelId}
+        </span>
         <div class="actions">
           {canCancel && (
             <form
