@@ -61,7 +61,7 @@ export function NewTrajectoryPage({
           <select name="repoId" required aria-label="Repository">
             {repos.map((repo) => (
               <option value={repo.id} selected={repo.id === selected}>
-                {repo.owner}/{repo.name}
+                {repo.name}
               </option>
             ))}
           </select>
@@ -266,7 +266,7 @@ export function TrajectoriesPage({
           <p>
             Showing trajectories for{" "}
             <a href={`/repos/${selectedRepo.id}`}>
-              {selectedRepo.owner}/{selectedRepo.name}
+              {selectedRepo.name}
             </a>
             . <a href="/trajectories">Clear filter</a>
           </p>

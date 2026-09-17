@@ -806,7 +806,7 @@ void test("aggregates recorded usage into a spend report", async (t) => {
   assert.deepEqual(spend.byRepo, [
     {
       id: repo.id,
-      label: "example/spend-project",
+      label: "spend-project",
       trajectories: 2,
       usage: { inputTokens: 300, outputTokens: 30, costUsd: 0.25 },
     },
