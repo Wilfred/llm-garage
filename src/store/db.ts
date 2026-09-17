@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Mutex } from "async-mutex";
 import type { DataSource, EntityManager, Repository } from "typeorm";
+import { ConversationMessageEntity } from "../entities/conversation-message";
 import { ModelEntity } from "../entities/model";
 import { RepoEntity } from "../entities/repo";
 import { RunEventEntity } from "../entities/run-event";
@@ -49,6 +50,7 @@ export class DatabaseDataStore implements DataStore {
   private readonly trajectoryRepository: Repository<TrajectoryEntity>;
   private readonly turnRepository: Repository<TurnEntity>;
   private readonly eventRepository: Repository<RunEventEntity>;
+  private readonly messageRepository: Repository<ConversationMessageEntity>;
   private readonly settingRepository: Repository<Setting>;
   private readonly activeWorkers = new Map<string, AbortController>();
   // Trajectories waiting for a worker slot, oldest first.
@@ -80,6 +82,9 @@ export class DatabaseDataStore implements DataStore {
     this.trajectoryRepository = dataSource.getRepository(TrajectoryEntity);
     this.turnRepository = dataSource.getRepository(TurnEntity);
     this.eventRepository = dataSource.getRepository(RunEventEntity);
+    this.messageRepository = dataSource.getRepository(
+      ConversationMessageEntity,
+    );
     this.settingRepository = dataSource.getRepository(Setting);
     this.worker = worker;
     this.sandbox = sandbox;
@@ -503,6 +508,7 @@ export class DatabaseDataStore implements DataStore {
         return false;
       }
 
+      await this.seedTurnConversation(manager, trajectoryId, turn);
       const model = await manager
         .getRepository(ModelEntity)
         .findOneBy({ id: trajectory.modelId });
@@ -524,53 +530,40 @@ export class DatabaseDataStore implements DataStore {
     });
   }
 
-  // A queued trajectory never started, so it is re-queued on startup. A running
-  // one lost its in-memory conversation with the worker, so it cannot continue.
+  // Neither a queued nor a running trajectory lost anything a restart cannot
+  // recover: the conversation is persisted as it goes, so both go back on the
+  // queue and the interrupted turn picks up where it stopped.
   private async recoverInterruptedWorkers(): Promise<void> {
     const requeued = await this.transaction(async (manager) => {
       const trajectoryRepository = manager.getRepository(TrajectoryEntity);
       const pending: Array<{ trajectoryId: string; turnId: string }> = [];
 
-      const queued = await trajectoryRepository.find({
-        where: { status: "queued" },
+      const interrupted = await trajectoryRepository.find({
+        where: [{ status: "running" }, { status: "queued" }],
         order: { createdAt: "ASC" },
       });
-      for (const trajectory of queued) {
-        const turn = await this.activeTurn(manager, trajectory.id);
-        if (turn)
-          pending.push({ trajectoryId: trajectory.id, turnId: turn.id });
-      }
-
-      const running = await trajectoryRepository.find({
-        where: { status: "running" },
-      });
-      for (const trajectory of running) {
-        const now = this.now();
-        trajectory.status = "failed";
-        trajectory.updatedAt = now;
-        await trajectoryRepository.save(trajectory);
-
+      for (const trajectory of interrupted) {
         const turn = await this.activeTurn(manager, trajectory.id);
         if (!turn) continue;
-        turn.status = "failed";
-        turn.finishedAt = now;
+
+        const now = this.now();
+        if (trajectory.status === "running") {
+          await this.repairConversation(manager, trajectory.id, turn.id);
+          await this.appendEvent(
+            manager,
+            trajectory.id,
+            turn.id,
+            "system",
+            "Worker interrupted when LLM Garage restarted; resuming",
+            now,
+          );
+        }
+        trajectory.status = "queued";
+        trajectory.updatedAt = now;
+        turn.status = "queued";
+        await trajectoryRepository.save(trajectory);
         await manager.getRepository(TurnEntity).save(turn);
-        await this.appendEvent(
-          manager,
-          trajectory.id,
-          turn.id,
-          "system",
-          "Worker interrupted when LLM Garage restarted",
-          now,
-        );
-        await this.appendEvent(
-          manager,
-          trajectory.id,
-          turn.id,
-          "status",
-          "Trajectory failed",
-          now,
-        );
+        pending.push({ trajectoryId: trajectory.id, turnId: turn.id });
       }
       return pending;
     });
@@ -616,6 +609,11 @@ export class DatabaseDataStore implements DataStore {
               this.recordWorkerEvent(trajectoryId, turnId, event),
             );
           },
+          appendMessage: (message) => {
+            writes = writes.then(() =>
+              this.recordConversationMessage(trajectoryId, turnId, message),
+            );
+          },
         });
       } catch (error) {
         workerError = error;
@@ -647,13 +645,20 @@ export class DatabaseDataStore implements DataStore {
     }
   }
 
+  // Turns that ran before the conversation log existed have no stored messages,
+  // so fall back to the prose their run events preserved. A trajectory can hold
+  // both kinds once an old one is continued, hence the per-turn choice.
   private async conversationMessages(
     trajectoryId: string,
   ): Promise<ConversationMessage[]> {
-    const [turns, events] = await Promise.all([
+    const [turns, stored, events] = await Promise.all([
       this.turnRepository.find({
         where: { trajectoryId },
         order: { createdAt: "ASC" },
+      }),
+      this.messageRepository.find({
+        where: { trajectoryId },
+        order: { sequence: "ASC" },
       }),
       this.eventRepository.find({
         where: { trajectoryId },
@@ -662,17 +667,113 @@ export class DatabaseDataStore implements DataStore {
     ]);
 
     return turns.flatMap((turn) => {
-      const output = events
-        .filter(
-          (event) => event.turnId === turn.id && event.kind === "model_output",
-        )
-        .map((event) => event.data)
-        .join("\n");
-      return [
-        { role: "user" as const, content: turn.prompt },
-        ...(output ? [{ role: "assistant" as const, content: output }] : []),
-      ];
+      const logged = stored.filter((message) => message.turnId === turn.id);
+      if (logged.length > 0) {
+        return logged.map(
+          (message) => JSON.parse(message.payload) as ConversationMessage,
+        );
+      }
+      return legacyTurnMessages(turn, events);
     });
+  }
+
+  // Gives a turn its opening messages the first time it starts. A resumed turn
+  // already has them, and one that predates the log contributes whatever prose
+  // its run events kept.
+  private async seedTurnConversation(
+    manager: EntityManager,
+    trajectoryId: string,
+    turn: TurnEntity,
+  ): Promise<void> {
+    const repository = manager.getRepository(ConversationMessageEntity);
+    if (await repository.existsBy({ turnId: turn.id })) return;
+
+    const events = await manager.getRepository(RunEventEntity).find({
+      where: { turnId: turn.id },
+      order: { sequence: "ASC" },
+    });
+    for (const message of legacyTurnMessages(turn, events)) {
+      await this.appendConversationMessage(
+        manager,
+        trajectoryId,
+        turn.id,
+        message,
+      );
+    }
+  }
+
+  private async recordConversationMessage(
+    trajectoryId: string,
+    turnId: string,
+    message: ConversationMessage,
+  ): Promise<void> {
+    await this.transaction(async (manager) => {
+      await this.appendConversationMessage(
+        manager,
+        trajectoryId,
+        turnId,
+        message,
+      );
+    });
+  }
+
+  private async appendConversationMessage(
+    manager: EntityManager,
+    trajectoryId: string,
+    turnId: string,
+    message: ConversationMessage,
+  ): Promise<void> {
+    const repository = manager.getRepository(ConversationMessageEntity);
+    const previous = await repository.findOne({
+      where: { trajectoryId },
+      order: { sequence: "DESC" },
+    });
+    await repository.save({
+      id: randomUUID(),
+      trajectoryId,
+      turnId,
+      sequence: (previous?.sequence ?? 0) + 1,
+      payload: JSON.stringify(message),
+      createdAt: this.now(),
+    });
+  }
+
+  // A restart can land between an assistant message that requested tool calls
+  // and the results being written. The provider rejects a conversation whose
+  // tool calls have no matching result, so stand in for the ones that were lost.
+  private async repairConversation(
+    manager: EntityManager,
+    trajectoryId: string,
+    turnId: string,
+  ): Promise<void> {
+    const repository = manager.getRepository(ConversationMessageEntity);
+    const stored = await repository.find({
+      where: { trajectoryId },
+      order: { sequence: "ASC" },
+    });
+    const messages = stored.map(
+      (message) => JSON.parse(message.payload) as ConversationMessage,
+    );
+
+    const answered = new Set(
+      messages.flatMap((message) =>
+        message.role === "tool" ? [message.tool_call_id] : [],
+      ),
+    );
+    const unanswered = messages.flatMap((message) =>
+      message.role === "assistant" && "tool_calls" in message
+        ? message.tool_calls.filter((call) => !answered.has(call.id))
+        : [],
+    );
+
+    for (const call of unanswered) {
+      await this.appendConversationMessage(manager, trajectoryId, turnId, {
+        role: "tool",
+        tool_call_id: call.id,
+        content:
+          "LLM Garage restarted before this command finished, so its result was lost. Re-run it if you still need the output.",
+      });
+    }
   }
 
   private async recordWorkerEvent(
@@ -868,6 +969,22 @@ export class DatabaseDataStore implements DataStore {
     this.lastTimestamp = Math.max(Date.now(), this.lastTimestamp + 1);
     return new Date(this.lastTimestamp);
   }
+}
+
+function legacyTurnMessages(
+  turn: TurnEntity,
+  events: RunEventEntity[],
+): ConversationMessage[] {
+  const output = events
+    .filter(
+      (event) => event.turnId === turn.id && event.kind === "model_output",
+    )
+    .map((event) => event.data)
+    .join("\n");
+  return [
+    { role: "user", content: turn.prompt },
+    ...(output ? [{ role: "assistant" as const, content: output }] : []),
+  ];
 }
 
 function toTrajectory(entity: TrajectoryEntity): Trajectory {

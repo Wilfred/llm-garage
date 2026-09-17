@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { formatUsage, type TokenUsage } from "../usage";
-import type { TrajectoryWorker, WorkerContext } from "./types";
+import type {
+  ConversationMessage,
+  TrajectoryWorker,
+  WorkerContext,
+} from "./types";
 import type { WebToolProvider } from "./web-tools";
 
 const defaultEndpoint = "https://openrouter.ai/api/v1/chat/completions";
@@ -154,19 +158,6 @@ const tools = [
   },
 ] as const;
 
-type ProviderMessage =
-  | { role: "system" | "user" | "assistant"; content: string }
-  | {
-      role: "assistant";
-      content: string | null;
-      tool_calls: Array<{
-        id: string;
-        type: "function";
-        function: { name: string; arguments: string };
-      }>;
-    }
-  | { role: "tool"; tool_call_id: string; content: string };
-
 export type OpenRouterWorkerOptions = {
   apiKey: string | undefined;
   endpoint?: string;
@@ -197,10 +188,16 @@ export class OpenRouterWorker implements TrajectoryWorker {
       throw new Error("OPENROUTER_API_KEY is not configured");
     }
 
-    const messages: ProviderMessage[] = [
+    // The system prompt is rebuilt each run rather than persisted, so a
+    // resumed turn picks up the current one.
+    const messages: ConversationMessage[] = [
       { role: "system", content: codingAgentPrompt },
-      ...context.messages.map((message) => ({ ...message })),
+      ...context.messages,
     ];
+    const append = (message: ConversationMessage): void => {
+      messages.push(message);
+      context.appendMessage(message);
+    };
     for (;;) {
       const completion = await this.complete(messages, context);
       const message = completion.choices[0]?.message;
@@ -223,17 +220,18 @@ export class OpenRouterWorker implements TrajectoryWorker {
         if (!message.content?.trim()) {
           throw new Error("OpenRouter returned an empty chat completion");
         }
+        append({ role: "assistant", content: message.content });
         return;
       }
 
-      messages.push({
+      append({
         role: "assistant",
         content: message.content,
         tool_calls: message.tool_calls,
       });
       for (const toolCall of message.tool_calls) {
         const result = await this.runTool(toolCall, context);
-        messages.push({
+        append({
           role: "tool",
           tool_call_id: toolCall.id,
           content: result,
@@ -243,7 +241,7 @@ export class OpenRouterWorker implements TrajectoryWorker {
   }
 
   private async complete(
-    messages: ProviderMessage[],
+    messages: ConversationMessage[],
     context: WorkerContext,
   ): Promise<z.infer<typeof completionSchema>> {
     const response = await this.fetch(this.endpoint, {

@@ -95,9 +95,11 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       if (!isNotFound(error)) throw error;
     }
 
+    // A deploy that changes the worker image must not discard the checkout of a
+    // trajectory that is resuming into this container, so the image it was
+    // built from is deliberately not compared here.
     if (
       details?.State.Running &&
-      details.Config.Image === this.image &&
       matchesRepository(details.Config.Labels, repository) &&
       matchesGithubToken(details.Config.Env, this.githubToken) &&
       allowsExec(details.HostConfig.Tmpfs)

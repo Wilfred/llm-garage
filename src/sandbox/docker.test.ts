@@ -218,6 +218,52 @@ void test("reconnects an existing worker container to the bridge", async () => {
   assert.equal(connectedContainer, containerName("existing"));
 });
 
+void test("keeps a worker container built from a superseded image", async () => {
+  let connected = false;
+  let removed = false;
+  const container = {
+    inspect: async () => ({
+      State: { Running: true },
+      Config: {
+        Image: "ghcr.io/wilfred/llm-garage:worker@sha256:previous",
+        Labels: {
+          "com.llm-garage.repository": "example/project",
+          "com.llm-garage.default-branch": "main",
+        },
+      },
+      HostConfig: {
+        Tmpfs: {
+          "/home/agent": "exec,nosuid,nodev",
+          "/tmp": "exec,nosuid,nodev,size=2g",
+        },
+      },
+      NetworkSettings: { Networks: {} },
+    }),
+    remove: async () => {
+      removed = true;
+    },
+  };
+  const docker = {
+    getContainer: () => container,
+    getNetwork: () => ({
+      connect: async () => {
+        connected = true;
+      },
+    }),
+  } as unknown as Docker;
+  const sandbox = new DockerSandbox({ docker, image: "worker:redeployed" });
+
+  await sandbox.create("existing", {
+    owner: "example",
+    name: "project",
+    defaultBranch: "main",
+  });
+
+  // Recreating would re-clone over the work a resuming trajectory left behind.
+  assert.equal(removed, false);
+  assert.equal(connected, true);
+});
+
 void test("lists and removes only managed containers that are not kept", async () => {
   const removed: string[] = [];
   let listOptions: Docker.ContainerListOptions | undefined;

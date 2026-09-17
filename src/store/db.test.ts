@@ -226,85 +226,105 @@ void test("persists trajectories, turns, and ordered events across restarts", as
   assert.equal(await restartedStore.deleteRepo(repo.id), "in_use");
 });
 
-void test("fails workers interrupted by an application restart", async (t) => {
-  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-restart-"));
+void test("resumes a turn interrupted by an application restart", async (t) => {
+  const dataDir = await mkdtemp(
+    path.join(os.tmpdir(), "llm-garage-trajectory-interrupted-"),
+  );
   let dataSource = createAppDataSource(dataDir);
   t.after(async () => {
     if (dataSource.isInitialized) await dataSource.destroy();
     await rm(dataDir, { recursive: true, force: true });
   });
   await dataSource.initialize();
-  const store = new DatabaseDataStore(dataSource, { seed: false });
-  await store.initialize();
-  await seedModels(store);
-  const repo = await store.createRepo({
+
+  const interrupted = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        context.appendMessage({
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "call-1",
+              type: "function",
+              function: {
+                name: "run_command",
+                arguments: JSON.stringify({ command: "npm ci" }),
+              },
+            },
+          ],
+        });
+        // The restart lands here, before the tool result is written.
+        await new Promise<void>(() => undefined);
+      },
+    },
+  });
+  await seedModels(interrupted);
+  const repo = await interrupted.createRepo({
     owner: "example",
     name: "interrupted-project",
     defaultBranch: "main",
   });
-  const startedAt = new Date("2026-09-14T23:02:42Z");
-  const trajectoryId = "interrupted-trajectory";
-  const turnId = "interrupted-turn";
-  await dataSource.getRepository(TrajectoryEntity).save({
-    id: trajectoryId,
-    parentId: null,
-    rootId: trajectoryId,
-    comparisonId: null,
+  const trajectory = await createOne(interrupted, {
     repoId: repo.id,
     title: "Interrupt the trajectory",
-    status: "running",
-    modelId: "openai/gpt-5.6-sol",
+    modelIds: ["openai/gpt-5.6-sol"],
     taskPrompt: "Wait for an application restart",
-    prUrl: null,
-    createdAt: startedAt,
-    updatedAt: startedAt,
   });
-  await dataSource.getRepository(TurnEntity).save({
-    id: turnId,
-    trajectoryId,
-    kind: "initial",
-    prompt: "Wait for an application restart",
-    status: "running",
-    createdAt: startedAt,
-    finishedAt: null,
-  });
-  await dataSource.getRepository(RunEventEntity).save({
-    id: "interrupted-event",
-    trajectoryId,
-    turnId,
-    sequence: 1,
-    kind: "status",
-    data: "GPT-5.6 Sol started",
-    ts: startedAt,
-  });
+  await waitForStatus(interrupted, trajectory.id, "running");
+  await delay(50);
 
   await dataSource.destroy();
   dataSource = createAppDataSource(dataDir);
   await dataSource.initialize();
-  const restartedStore = new DatabaseDataStore(dataSource, { seed: false });
-  await restartedStore.initialize();
 
-  assert.equal(
-    (await restartedStore.getTrajectory(trajectoryId))?.status,
-    "failed",
-  );
-  const [turn] = await restartedStore.listTurns(trajectoryId);
-  assert.ok(turn);
-  assert.equal(turn.status, "failed");
-  assert.ok(turn.finishedAt);
-  assert.deepEqual(
-    (await restartedStore.listRunEvents(turn.id)).map(({ kind, data }) => ({
-      kind,
-      data,
-    })),
-    [
-      { kind: "status", data: "GPT-5.6 Sol started" },
-      {
-        kind: "system",
-        data: "Worker interrupted when LLM Garage restarted",
+  const replayed: ConversationMessage[][] = [];
+  const restarted = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        replayed.push(context.messages);
       },
-      { kind: "status", data: "Trajectory failed" },
-    ],
+    },
+  });
+  await restarted.initialize();
+  await waitForStatus(restarted, trajectory.id, "succeeded");
+
+  // The turn continues rather than failing, and the tool call the restart cut
+  // short is answered so the provider will accept the conversation.
+  const [turn] = await restarted.listTurns(trajectory.id);
+  assert.ok(turn);
+  assert.equal(turn.status, "succeeded");
+  assert.deepEqual(replayed.at(0), [
+    { role: "user", content: "Wait for an application restart" },
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [
+        {
+          id: "call-1",
+          type: "function",
+          function: {
+            name: "run_command",
+            arguments: JSON.stringify({ command: "npm ci" }),
+          },
+        },
+      ],
+    },
+    {
+      role: "tool",
+      tool_call_id: "call-1",
+      content:
+        "LLM Garage restarted before this command finished, so its result was lost. Re-run it if you still need the output.",
+    },
+  ]);
+  assert.ok(
+    (await restarted.listRunEvents(turn.id)).some(
+      ({ kind, data }) =>
+        kind === "system" &&
+        data === "Worker interrupted when LLM Garage restarted; resuming",
+    ),
   );
 });
 
@@ -368,10 +388,10 @@ void test("sends persisted conversation history to each worker turn", async (t) 
     worker: {
       run: async (context) => {
         conversations.push(context.messages.map((message) => ({ ...message })));
-        context.emit({
-          kind: "model_output",
-          data: conversations.length === 1 ? "First answer" : "Second answer",
-        });
+        const answer =
+          conversations.length === 1 ? "First answer" : "Second answer";
+        context.emit({ kind: "model_output", data: answer });
+        context.appendMessage({ role: "assistant", content: answer });
       },
     },
   });
@@ -953,7 +973,7 @@ void test("runs at most the configured number of trajectories at once", async (t
   for (const resolve of release.values()) resolve();
 });
 
-void test("re-queues trajectories that were still waiting at restart", async (t) => {
+void test("re-queues both running and waiting trajectories at restart", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-requeue-"));
   let dataSource = createAppDataSource(dataDir);
   t.after(async () => {
@@ -992,9 +1012,7 @@ void test("re-queues trajectories that were still waiting at restart", async (t)
   });
   await restarted.initialize();
 
-  // The interrupted trajectory cannot continue, but the queued one never
-  // started and so runs to completion.
-  assert.equal((await restarted.getTrajectory(running.id))?.status, "failed");
+  await waitForStatus(restarted, running.id, "succeeded");
   await waitForStatus(restarted, waiting.id, "succeeded");
 });
 
@@ -1044,4 +1062,77 @@ void test("drops a queued trajectory from the queue when it is cancelled", async
   await delay(50);
   assert.equal(runs, 1);
   assert.equal((await store.getTrajectory(waiting.id))?.status, "cancelled");
+});
+
+void test("replays trajectories that predate the conversation log", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-legacy-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+
+  const conversations: ConversationMessage[][] = [];
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        conversations.push(context.messages);
+      },
+    },
+  });
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "legacy-project",
+    defaultBranch: "main",
+  });
+
+  // A trajectory written before this store kept a conversation log: its history
+  // survives only as run events.
+  const ranAt = new Date("2026-09-14T23:02:42Z");
+  const trajectoryId = "legacy-trajectory";
+  const turnId = "legacy-turn";
+  await dataSource.getRepository(TrajectoryEntity).save({
+    id: trajectoryId,
+    parentId: null,
+    rootId: trajectoryId,
+    comparisonId: null,
+    repoId: repo.id,
+    title: "Legacy trajectory",
+    status: "succeeded",
+    modelId: "openai/gpt-5.6-sol",
+    taskPrompt: "Original question",
+    prUrl: null,
+    createdAt: ranAt,
+    updatedAt: ranAt,
+  });
+  await dataSource.getRepository(TurnEntity).save({
+    id: turnId,
+    trajectoryId,
+    kind: "initial",
+    prompt: "Original question",
+    status: "succeeded",
+    createdAt: ranAt,
+    finishedAt: ranAt,
+  });
+  await dataSource.getRepository(RunEventEntity).save({
+    id: "legacy-event",
+    trajectoryId,
+    turnId,
+    sequence: 1,
+    kind: "model_output",
+    data: "Original answer",
+    ts: ranAt,
+  });
+
+  await store.addFeedback(trajectoryId, "Follow-up question");
+  await waitForStatus(store, trajectoryId, "succeeded");
+
+  assert.deepEqual(conversations.at(0), [
+    { role: "user", content: "Original question" },
+    { role: "assistant", content: "Original answer" },
+    { role: "user", content: "Follow-up question" },
+  ]);
 });
