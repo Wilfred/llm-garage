@@ -24,6 +24,7 @@ async function main(): Promise<void> {
       webTools: new WebTools({ braveApiKey: config.BRAVE_SEARCH_API_KEY }),
     }),
     sandbox,
+    maxRunning: config.MAX_RUNNING_TRAJECTORIES,
   });
   await store.initialize();
   const app = createApp(dataSource, store, sandbox);
