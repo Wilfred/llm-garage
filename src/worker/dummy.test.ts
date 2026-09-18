@@ -13,6 +13,7 @@ void test("emits a short model and tool conversation before completing", async (
     effort: "medium",
     messages: [{ role: "user", content: "Improve the example" }],
     signal: new AbortController().signal,
+    appendMessage: () => undefined,
     emit: (event) => events.push(event),
   });
 
@@ -48,6 +49,7 @@ void test("stops without emitting more events when cancelled", async () => {
     effort: "medium",
     messages: [{ role: "user", content: "Wait" }],
     signal: controller.signal,
+    appendMessage: () => undefined,
     emit: (event) => events.push(event),
   });
 

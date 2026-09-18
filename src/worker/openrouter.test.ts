@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { OpenRouterWorker } from "./openrouter";
-import type { WorkerEvent } from "./types";
+import type { ConversationMessage, WorkerEvent } from "./types";
 
 void test("sends a conversation to OpenRouter and emits its response", async () => {
   let request:
@@ -35,6 +35,7 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
       { role: "user", content: "Follow-up question" },
     ],
     signal: controller.signal,
+    appendMessage: () => undefined,
     emit: (event) => events.push(event),
   });
 
@@ -134,6 +135,7 @@ void test("sets the trajectory name when requested by the model", async () => {
     setTrajectoryName: async (name) => {
       names.push(name);
     },
+    appendMessage: () => undefined,
     emit: () => undefined,
   });
 
@@ -221,6 +223,7 @@ void test("fetches URLs and searches Brave when requested by the model", async (
     effort: "medium",
     messages: [{ role: "user", content: "Research example.com" }],
     signal: new AbortController().signal,
+    appendMessage: () => undefined,
     emit: (event) => events.push(event),
   });
 
@@ -288,6 +291,7 @@ void test("runs model-requested shell commands and returns their output", async 
   });
   const commands: string[] = [];
   const events: WorkerEvent[] = [];
+  const appended: ConversationMessage[] = [];
 
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
@@ -304,6 +308,7 @@ void test("runs model-requested shell commands and returns their output", async 
         truncated: false,
       };
     },
+    appendMessage: (message) => appended.push(message),
     emit: (event) => events.push(event),
   });
 
@@ -327,6 +332,35 @@ void test("runs model-requested shell commands and returns their output", async 
     ["model_output", "tool", "tool", "model_output"],
   );
   assert.match(events[2]?.data ?? "", /bin\\nworkspace/);
+  // Every message is handed over for persistence, so an interrupted turn can be
+  // replayed with its tool calls and results paired up.
+  assert.deepEqual(appended, [
+    {
+      role: "assistant",
+      content: "I'll inspect the container.",
+      tool_calls: [
+        {
+          id: "call-1",
+          type: "function",
+          function: {
+            name: "run_command",
+            arguments: JSON.stringify({ command: "ls /" }),
+          },
+        },
+      ],
+    },
+    {
+      role: "tool",
+      tool_call_id: "call-1",
+      content: JSON.stringify({
+        exitCode: 0,
+        stdout: "bin\nworkspace\n",
+        stderr: "",
+        truncated: false,
+      }),
+    },
+    { role: "assistant", content: "The root contains bin and workspace." },
+  ]);
 });
 
 void test("reports OpenRouter API errors", async () => {
@@ -346,6 +380,7 @@ void test("reports OpenRouter API errors", async () => {
       effort: "medium",
       messages: [{ role: "user", content: "Hello" }],
       signal: new AbortController().signal,
+      appendMessage: () => undefined,
       emit: () => undefined,
     }),
     /OpenRouter request failed \(503\): Model is unavailable/,
@@ -369,6 +404,7 @@ void test("requires an API key before making a request", async () => {
       effort: "medium",
       messages: [{ role: "user", content: "Hello" }],
       signal: new AbortController().signal,
+      appendMessage: () => undefined,
       emit: () => undefined,
     }),
     /OPENROUTER_API_KEY is not configured/,

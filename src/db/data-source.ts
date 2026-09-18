@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import path from "node:path";
 import { DataSource } from "typeorm";
+import { ConversationMessageEntity } from "../entities/conversation-message";
 import { ModelEntity } from "../entities/model";
 import { RepoEntity } from "../entities/repo";
 import { RunEventEntity } from "../entities/run-event";
@@ -21,6 +22,7 @@ export function createAppDataSource(dataDir: string): DataSource {
       TrajectoryEntity,
       TurnEntity,
       RunEventEntity,
+      ConversationMessageEntity,
     ],
     synchronize: true,
     enableWAL: true,
