@@ -169,7 +169,13 @@ export function createTrajectoriesRouter(store: DataStore): Router {
         );
       return;
     }
-    const transcript = await loadTranscript(store, trajectory.id);
+    const [transcript, models] = await Promise.all([
+      loadTranscript(store, trajectory.id),
+      store.listModels(),
+    ]);
+    const model = models.find(
+      (candidate) => candidate.id === trajectory.modelId,
+    );
     res
       .type("html")
       .send(
@@ -177,6 +183,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
           <TrajectoryDetailPage
             trajectory={trajectory}
             transcript={transcript}
+            {...(model === undefined ? {} : { model })}
           />,
         ),
       );
