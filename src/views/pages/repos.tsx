@@ -50,7 +50,7 @@ export function ReposPage({
                   <tr>
                     <td>
                       <a class="repo-name" href={`/repos/${repo.id}`}>
-                        {repo.owner}/{repo.name}
+                        {repo.name}
                       </a>
                     </td>
                     <td>
@@ -130,17 +130,17 @@ export function RepoDetailPage({
   const activeCount = trajectories.filter(isActive).length;
   const trajectoriesUrl = `/trajectories?repoId=${encodeURIComponent(repo.id)}`;
   return (
-    <Layout title={`${repo.owner}/${repo.name}`} section="settings">
+    <Layout title={repo.name} section="settings">
       <div class="breadcrumb">
         <a href="/repos">Repositories</a>
         <span>/</span>
         <strong>
-          {repo.owner}/{repo.name}
+          {repo.name}
         </strong>
       </div>
       <div class="page-header">
         <h1>
-          {repo.owner}/{repo.name}
+          {repo.name}
         </h1>
         <div class="actions">
           <a
