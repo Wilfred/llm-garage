@@ -69,9 +69,7 @@ export function TrajectoryCards({
             <StatusBadge status={trajectory.status} />
             <div class="card-title">{trajectory.title}</div>
             <div class="card-meta">
-              <span>
-                {repo ? repo.name : "Unknown repository"}
-              </span>
+              <span>{repo ? repo.name : "Unknown repository"}</span>
               <span>{model?.name ?? trajectory.modelId}</span>
               <time dateTime={trajectory.updatedAt.toISOString()}>
                 {formatDate(trajectory.updatedAt)}

@@ -134,14 +134,10 @@ export function RepoDetailPage({
       <div class="breadcrumb">
         <a href="/repos">Repositories</a>
         <span>/</span>
-        <strong>
-          {repo.name}
-        </strong>
+        <strong>{repo.name}</strong>
       </div>
       <div class="page-header">
-        <h1>
-          {repo.name}
-        </h1>
+        <h1>{repo.name}</h1>
         <div class="actions">
           <a
             class="button button-primary"
