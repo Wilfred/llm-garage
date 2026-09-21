@@ -39,7 +39,7 @@ export function ComparisonPage({
       <div class="detail-toolbar">
         <span class="count">
           {columns.length} models on the same task
-          {repo ? ` · ${repo.owner}/${repo.name}` : ""}
+          {repo ? ` · ${repo.name}` : ""}
         </span>
       </div>
       <p class="turn-prompt">{first.trajectory.taskPrompt}</p>

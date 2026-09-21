@@ -237,7 +237,7 @@ export class DatabaseDataStore implements DataStore {
         const repo = repos.find(({ id }) => id === trajectory.repoId);
         return {
           id: trajectory.repoId,
-          label: repo ? `${repo.owner}/${repo.name}` : "Unknown repository",
+          label: repo ? repo.name : "Unknown repository",
         };
       }),
       unpricedTurns,
