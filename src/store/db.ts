@@ -604,6 +604,24 @@ export class DatabaseDataStore implements DataStore {
             this.sandbox.runCommand(trajectoryId, command, controller.signal),
           setTrajectoryName: (name) =>
             this.setTrajectoryName(trajectoryId, name),
+          garageSettings: async () => {
+            const [models, repos] = await Promise.all([
+              this.listModels(),
+              this.listRepos(),
+            ]);
+            return {
+              models: models.map(({ id, name, effort }) => ({
+                id,
+                name,
+                effort,
+              })),
+              repos: repos.map(({ owner, name, defaultBranch }) => ({
+                owner,
+                name,
+                defaultBranch,
+              })),
+            };
+          },
           emit: (event) => {
             writes = writes.then(() =>
               this.recordWorkerEvent(trajectoryId, turnId, event),
