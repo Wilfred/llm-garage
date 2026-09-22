@@ -116,7 +116,7 @@ const tools = [
     function: {
       name: "run_command",
       description:
-        "Run a shell command in the trajectory's isolated Docker container.",
+        "Run a shell command in the trajectory's isolated Docker container. A command that runs past the time limit is stopped, and its result reports timedOut.",
       parameters: {
         type: "object",
         properties: {

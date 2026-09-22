@@ -17,6 +17,7 @@ async function main(): Promise<void> {
     docker: new Docker({ socketPath: config.DOCKER_SOCKET }),
     image: config.WORKER_IMAGE,
     githubToken: config.GITHUB_TOKEN,
+    commandTimeoutMs: config.COMMAND_TIMEOUT_SECONDS * 1000,
   });
   const store = new DatabaseDataStore(dataSource, {
     worker: new OpenRouterWorker({

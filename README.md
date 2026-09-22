@@ -56,8 +56,8 @@ Repositories and trajectories are stored in SQLite at
 ## Security
 
 Each session gets a Docker container to work inside, with a memory
-limit and disk storage limit. Its only external permissions are the
-GitHub token provided
+limit, a disk storage limit, and a time limit on each command. Its
+only external permissions are the GitHub token provided
 
 I run this on a VM that isn't running anything else, using a separate
 GitHub account.

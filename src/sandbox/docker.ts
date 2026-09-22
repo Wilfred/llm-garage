@@ -8,6 +8,7 @@ import type {
   RemoveContainersOptions,
   Sandbox,
   SandboxRepository,
+  WorkspaceState,
 } from "./types";
 
 const managedLabel = "com.llm-garage.managed";
@@ -15,6 +16,10 @@ const trajectoryLabel = "com.llm-garage.trajectory-id";
 const repositoryLabel = "com.llm-garage.repository";
 const branchLabel = "com.llm-garage.default-branch";
 const defaultOutputLimit = 16 * 1024;
+const defaultCommandTimeoutMs = 15 * 60 * 1000;
+// How long a stopped workload gets to die before its stream is abandoned. The
+// stop sends SIGTERM, waits, then sends SIGKILL.
+const killGraceMs = 10_000;
 const truncationMarker = Buffer.from("\n... output truncated ...\n");
 const defaultWorkerImage = "ghcr.io/wilfred/llm-garage:worker";
 const workerUser = "agent";
@@ -30,6 +35,7 @@ export type DockerSandboxOptions = {
   nanoCpus?: number;
   pidsLimit?: number;
   outputLimitBytes?: number;
+  commandTimeoutMs?: number;
 };
 
 export class DockerSandbox implements Sandbox, ContainerManager {
@@ -40,8 +46,9 @@ export class DockerSandbox implements Sandbox, ContainerManager {
   private readonly nanoCpus: number;
   private readonly pidsLimit: number;
   private readonly outputLimitBytes: number;
+  private readonly commandTimeoutMs: number;
   private imagePromise: Promise<void> | undefined;
-  private readonly creates = new Map<string, Promise<void>>();
+  private readonly creates = new Map<string, Promise<WorkspaceState>>();
 
   constructor({
     docker = new Docker(),
@@ -51,6 +58,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
     nanoCpus = 1_000_000_000,
     pidsLimit = 128,
     outputLimitBytes = defaultOutputLimit,
+    commandTimeoutMs = defaultCommandTimeoutMs,
   }: DockerSandboxOptions = {}) {
     this.docker = docker;
     this.image = image;
@@ -59,23 +67,21 @@ export class DockerSandbox implements Sandbox, ContainerManager {
     this.nanoCpus = nanoCpus;
     this.pidsLimit = pidsLimit;
     this.outputLimitBytes = outputLimitBytes;
+    this.commandTimeoutMs = commandTimeoutMs;
   }
 
   async create(
     trajectoryId: string,
     repository: SandboxRepository,
-  ): Promise<void> {
+  ): Promise<WorkspaceState> {
     validateTrajectoryId(trajectoryId);
     const pending = this.creates.get(trajectoryId);
-    if (pending) {
-      await pending;
-      return;
-    }
+    if (pending) return pending;
 
     const creation = this.createContainer(trajectoryId, repository);
     this.creates.set(trajectoryId, creation);
     try {
-      await creation;
+      return await creation;
     } finally {
       if (this.creates.get(trajectoryId) === creation) {
         this.creates.delete(trajectoryId);
@@ -86,7 +92,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
   private async createContainer(
     trajectoryId: string,
     repository: SandboxRepository,
-  ): Promise<void> {
+  ): Promise<WorkspaceState> {
     const existing = this.docker.getContainer(containerName(trajectoryId));
     let details: Docker.ContainerInspectInfo | undefined;
     try {
@@ -97,7 +103,9 @@ export class DockerSandbox implements Sandbox, ContainerManager {
 
     // A deploy that changes the worker image must not discard the checkout of a
     // trajectory that is resuming into this container, so the image it was
-    // built from is deliberately not compared here.
+    // built from is deliberately not compared here. A container that stopped is
+    // rebuilt rather than started: its home is a tmpfs, so the checkout went
+    // with it.
     if (
       details?.State.Running &&
       matchesRepository(details.Config.Labels, repository) &&
@@ -109,7 +117,7 @@ export class DockerSandbox implements Sandbox, ContainerManager {
           Container: containerName(trajectoryId),
         });
       }
-      return;
+      return "reused";
     }
     if (details) await existing.remove({ force: true, v: true });
 
@@ -157,14 +165,15 @@ export class DockerSandbox implements Sandbox, ContainerManager {
       await container.remove({ force: true, v: true }).catch(() => undefined);
       throw error;
     }
+    return "created";
   }
 
   private async cloneRepository(
     container: Docker.Container,
     repository: SandboxRepository,
   ): Promise<void> {
-    const execution = await container.exec({
-      Cmd: [
+    const result = await this.execute(container, {
+      cmd: [
         "git",
         "clone",
         "--branch",
@@ -174,28 +183,12 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         `https://github.com/${repository.owner}/${repository.name}.git`,
         repositoryPath,
       ],
-      AttachStdout: true,
-      AttachStderr: true,
-      Tty: false,
-      User: workerUser,
-      WorkingDir: workerHome,
+      workingDir: workerHome,
     });
-    const stream = await execution.start({ hijack: true, stdin: false });
-    const stdout = new PassThrough();
-    const stderr = new PassThrough();
-    const stdoutCapture = capture(stdout, this.outputLimitBytes);
-    const stderrCapture = capture(stderr, this.outputLimitBytes);
-    this.docker.modem.demuxStream(stream, stdout, stderr);
-    await finished(stream);
-    stdout.end();
-    stderr.end();
-    const [inspection, out, err] = await Promise.all([
-      execution.inspect(),
-      stdoutCapture,
-      stderrCapture,
-    ]);
-    if (inspection.ExitCode !== 0) {
-      const detail = err.text.trim() || out.text.trim();
+    if (result.exitCode !== 0) {
+      const detail = result.timedOut
+        ? "timed out"
+        : result.stderr.trim() || result.stdout.trim();
       throw new Error(
         `Failed to clone ${repository.owner}/${repository.name}${detail ? `: ${detail}` : ""}`,
       );
@@ -216,13 +209,28 @@ export class DockerSandbox implements Sandbox, ContainerManager {
     const details = await container.inspect();
     if (!details.State.Running) await container.start();
 
+    return this.execute(container, {
+      cmd: ["/bin/sh", "-lc", command],
+      workingDir: repositoryPath,
+      signal,
+    });
+  }
+
+  private async execute(
+    container: Docker.Container,
+    {
+      cmd,
+      workingDir,
+      signal,
+    }: { cmd: string[]; workingDir: string; signal?: AbortSignal },
+  ): Promise<CommandResult> {
     const execution = await container.exec({
-      Cmd: ["/bin/sh", "-lc", command],
+      Cmd: cmd,
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
       User: workerUser,
-      WorkingDir: repositoryPath,
+      WorkingDir: workingDir,
     });
     const stream = await execution.start({ hijack: true, stdin: false });
     const stdout = new PassThrough();
@@ -231,14 +239,22 @@ export class DockerSandbox implements Sandbox, ContainerManager {
     const stderrCapture = capture(stderr, this.outputLimitBytes);
     this.docker.modem.demuxStream(stream, stdout, stderr);
 
+    let timedOut = false;
+    let abandon: NodeJS.Timeout | undefined;
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      void this.killWorkload(container);
+      // Whatever survives both signals must not hold the worker slot, so stop
+      // waiting for output it may never stop producing.
+      abandon = setTimeout(() => {
+        stream.destroy(timeoutError());
+      }, killGraceMs);
+    }, this.commandTimeoutMs);
     const onAbort = (): void => {
       stream.destroy(abortError());
-      void container.kill().catch((error: unknown) => {
-        if (!isNotRunning(error))
-          console.error("Failed to stop sandbox", error);
-      });
+      void this.killWorkload(container);
     };
-    signal.addEventListener("abort", onAbort, { once: true });
+    signal?.addEventListener("abort", onAbort, { once: true });
     try {
       await finished(stream);
       stdout.end();
@@ -253,11 +269,38 @@ export class DockerSandbox implements Sandbox, ContainerManager {
         stdout: out.text,
         stderr: err.text,
         truncated: out.truncated || err.truncated,
+        timedOut,
       };
     } finally {
-      signal.removeEventListener("abort", onAbort);
+      clearTimeout(deadline);
+      clearTimeout(abandon);
+      signal?.removeEventListener("abort", onAbort);
       stdout.end();
       stderr.end();
+    }
+  }
+
+  // Docker cannot signal a single exec, and killing the container would take
+  // the tmpfs holding the checkout with it. Signalling from the inside stops
+  // everything the agent started: the kernel leaves PID 1 out of a broadcast,
+  // so the container survives with its workspace intact. Only one command runs
+  // in a container at a time, so nothing else is caught by this.
+  private async killWorkload(container: Docker.Container): Promise<void> {
+    try {
+      const execution = await container.exec({
+        Cmd: [
+          "/bin/sh",
+          "-c",
+          "trap '' TERM; kill -TERM -1 2>/dev/null; sleep 2; kill -KILL -1 2>/dev/null; exit 0",
+        ],
+        AttachStdout: false,
+        AttachStderr: false,
+        Tty: false,
+        User: workerUser,
+      });
+      await execution.start({ hijack: false, stdin: false });
+    } catch (error) {
+      console.error("Failed to stop the sandbox workload", error);
     }
   }
 
@@ -446,13 +489,14 @@ function abortError(): Error {
   return error;
 }
 
-function isNotFound(error: unknown): boolean {
-  return statusCode(error) === 404;
+function timeoutError(): Error {
+  const error = new Error("Command timed out and could not be stopped");
+  error.name = "TimeoutError";
+  return error;
 }
 
-function isNotRunning(error: unknown): boolean {
-  const status = statusCode(error);
-  return status === 304 || status === 409;
+function isNotFound(error: unknown): boolean {
+  return statusCode(error) === 404;
 }
 
 function statusCode(error: unknown): number | undefined {

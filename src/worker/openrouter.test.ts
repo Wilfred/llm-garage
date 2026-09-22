@@ -312,6 +312,7 @@ void test("runs model-requested shell commands and returns their output", async 
         stdout: "bin\nworkspace\n",
         stderr: "",
         truncated: false,
+        timedOut: false,
       };
     },
     appendMessage: (message) => appended.push(message),
@@ -331,6 +332,7 @@ void test("runs model-requested shell commands and returns their output", async 
       stdout: "bin\nworkspace\n",
       stderr: "",
       truncated: false,
+      timedOut: false,
     }),
   });
   assert.deepEqual(
@@ -363,6 +365,7 @@ void test("runs model-requested shell commands and returns their output", async 
         stdout: "bin\nworkspace\n",
         stderr: "",
         truncated: false,
+        timedOut: false,
       }),
     },
     { role: "assistant", content: "The root contains bin and workspace." },
