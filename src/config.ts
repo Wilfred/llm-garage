@@ -11,6 +11,7 @@ const envSchema = z.object({
   DOCKER_SOCKET: z.string().min(1).default("/var/run/docker.sock"),
   WORKER_IMAGE: z.string().min(1).default("ghcr.io/wilfred/llm-garage:worker"),
   MAX_RUNNING_TRAJECTORIES: z.coerce.number().int().positive().default(2),
+  COMMAND_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(900),
 });
 
 export const config = envSchema.parse(process.env);

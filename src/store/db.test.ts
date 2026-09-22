@@ -661,6 +661,7 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
   const sandbox: Sandbox = {
     create: async (trajectoryId, repository) => {
       created.push({ trajectoryId, repository });
+      return "created";
     },
     runCommand: async (trajectoryId, command) => {
       commands.push({ trajectoryId, command });
@@ -669,6 +670,7 @@ void test("owns a sandbox for the full trajectory lifecycle", async (t) => {
         stdout: "bin\nworkspace\n",
         stderr: "",
         truncated: false,
+        timedOut: false,
       };
     },
     archive: async (trajectoryId) => {
@@ -831,6 +833,69 @@ void test("aggregates recorded usage into a spend report", async (t) => {
       usage: { inputTokens: 300, outputTokens: 30, costUsd: 0.25 },
     },
   ]);
+});
+
+void test("tells a trajectory when its container came back empty", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-rebuild-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  let creations = 0;
+  const sandbox: Sandbox = {
+    // The container survives the first turn and is rebuilt for the second.
+    create: async () => (++creations === 1 ? "reused" : "created"),
+    runCommand: async () => {
+      throw new Error("Commands are not part of this test");
+    },
+    archive: async () => undefined,
+  };
+  const contexts: ConversationMessage[][] = [];
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    sandbox,
+    worker: {
+      run: async (context) => {
+        contexts.push([...context.messages]);
+        context.appendMessage({
+          role: "assistant",
+          content: "Edited the README",
+        });
+      },
+    },
+  });
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "rebuild-project",
+    defaultBranch: "main",
+  });
+  const trajectory = await createOne(store, {
+    repoId: repo.id,
+    title: "Survive a rebuild",
+    modelIds: ["openai/gpt-5.6-sol"],
+    taskPrompt: "Edit the README",
+  });
+  await waitForStatus(store, trajectory.id, "succeeded");
+
+  await store.addFeedback(trajectory.id, "Add a heading too");
+  await waitForStatus(store, trajectory.id, "succeeded");
+
+  assert.equal(contexts.length, 2);
+  assert.ok(
+    !contexts[0]?.some(({ content }) => /rebuilt/.test(content ?? "")),
+    "an untouched workspace needs no warning",
+  );
+  assert.match(String(contexts[1]?.at(-1)?.content), /rebuilt/);
+  const turns = await store.listTurns(trajectory.id);
+  const events = await store.listRunEvents(turns[1]?.id ?? "");
+  assert.ok(
+    events.some(
+      ({ kind, data }) => kind === "system" && data.startsWith("Container reb"),
+    ),
+  );
 });
 
 async function waitForStatus(

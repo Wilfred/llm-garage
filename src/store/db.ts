@@ -587,11 +587,14 @@ export class DatabaseDataStore implements DataStore {
       const repo = await this.getRepo(trajectory.repoId);
       if (!repo) throw new Error(`Unknown repository: ${trajectory.repoId}`);
       const messages = await this.conversationMessages(trajectoryId);
-      await this.sandbox.create(trajectoryId, {
+      const workspace = await this.sandbox.create(trajectoryId, {
         owner: repo.owner,
         name: repo.name,
         defaultBranch: repo.defaultBranch,
       });
+      if (workspace === "created") {
+        await this.noteWorkspaceRebuild(trajectoryId, turnId, messages);
+      }
       let workerError: unknown;
       try {
         await this.worker.run({
@@ -661,6 +664,35 @@ export class DatabaseDataStore implements DataStore {
         this.activeWorkers.delete(trajectoryId);
       }
     }
+  }
+
+  // A rebuilt container comes back with a fresh clone, so a trajectory that had
+  // already started work resumes against a workspace that no longer holds it.
+  // Say so rather than let the model act on what the conversation implies.
+  private async noteWorkspaceRebuild(
+    trajectoryId: string,
+    turnId: string,
+    messages: ConversationMessage[],
+  ): Promise<void> {
+    if (!messages.some(({ role }) => role === "assistant")) return;
+
+    const message: ConversationMessage = {
+      role: "user",
+      content:
+        "The container for this trajectory was rebuilt, so /home/agent/repo is a fresh clone of the default branch and any work you did not push is gone. Check the state of the repository before you continue.",
+    };
+    messages.push(message);
+    await this.recordConversationMessage(trajectoryId, turnId, message);
+    await this.transaction((manager) =>
+      this.appendEvent(
+        manager,
+        trajectoryId,
+        turnId,
+        "system",
+        "Container rebuilt; work from earlier in this trajectory that was not pushed is gone",
+        this.now(),
+      ),
+    );
   }
 
   // Turns that ran before the conversation log existed have no stored messages,

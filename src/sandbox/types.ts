@@ -3,7 +3,14 @@ export type CommandResult = {
   stdout: string;
   stderr: string;
   truncated: boolean;
+  // Set when the command outstayed its time limit and was stopped.
+  timedOut: boolean;
 };
+
+// Whether the workspace a trajectory is about to use still holds what an
+// earlier turn left there. A container that has to be rebuilt comes back with a
+// fresh clone, because the checkout lives on a tmpfs that a stop discards.
+export type WorkspaceState = "reused" | "created";
 
 export type SandboxRepository = {
   owner: string;
@@ -31,7 +38,10 @@ export interface ContainerManager {
 }
 
 export interface Sandbox {
-  create(trajectoryId: string, repository: SandboxRepository): Promise<void>;
+  create(
+    trajectoryId: string,
+    repository: SandboxRepository,
+  ): Promise<WorkspaceState>;
   runCommand(
     trajectoryId: string,
     command: string,
@@ -44,7 +54,9 @@ export class DisabledSandbox implements Sandbox {
   async create(
     _trajectoryId: string,
     _repository: SandboxRepository,
-  ): Promise<void> {}
+  ): Promise<WorkspaceState> {
+    return "reused";
+  }
 
   async runCommand(
     _trajectoryId: string,

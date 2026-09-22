@@ -141,6 +141,7 @@ void test("configures, executes in, and archives one isolated container", async 
     stdout: "bin\nworkspace\n",
     stderr: "",
     truncated: false,
+    timedOut: false,
   });
   assert.equal(executions[1]?.WorkingDir, "/home/agent/repo");
 
@@ -262,6 +263,105 @@ void test("keeps a worker container built from a superseded image", async () => 
   // Recreating would re-clone over the work a resuming trajectory left behind.
   assert.equal(removed, false);
   assert.equal(connected, true);
+});
+
+const stopWorkloadCommand = [
+  "/bin/sh",
+  "-c",
+  "trap '' TERM; kill -TERM -1 2>/dev/null; sleep 2; kill -KILL -1 2>/dev/null; exit 0",
+];
+
+// The checkout lives on a tmpfs, so stopping the container would throw away
+// work the trajectory can still be resumed onto.
+void test("stops the workload rather than the container when cancelled", async () => {
+  const commands: string[][] = [];
+  let killed = false;
+  let removed = false;
+  const commandStream = new PassThrough();
+  const container = {
+    inspect: async () => ({ State: { Running: true } }),
+    exec: async (options: Docker.ExecCreateOptions) => {
+      const cmd = options.Cmd ?? [];
+      commands.push(cmd);
+      return {
+        // The command itself never finishes on its own.
+        start: async () =>
+          cmd[1] === "-lc" ? commandStream : new PassThrough(),
+        inspect: async () => ({ ExitCode: 0 }),
+      };
+    },
+    kill: async () => {
+      killed = true;
+    },
+    remove: async () => {
+      removed = true;
+    },
+  };
+  const docker = {
+    getContainer: () => container,
+    modem: { demuxStream: demux },
+  } as unknown as Docker;
+  const sandbox = new DockerSandbox({ docker });
+
+  const controller = new AbortController();
+  const pending = sandbox.runCommand(
+    "cancelled",
+    "sleep 600",
+    controller.signal,
+  );
+  await settle();
+  controller.abort();
+
+  await assert.rejects(pending, { name: "AbortError" });
+  await settle();
+  assert.equal(killed, false);
+  assert.equal(removed, false);
+  assert.deepEqual(commands[1], stopWorkloadCommand);
+});
+
+void test("stops a command that outstays its time limit", async () => {
+  const commands: string[][] = [];
+  let killed = false;
+  const commandStream = new PassThrough();
+  const container = {
+    inspect: async () => ({ State: { Running: true } }),
+    exec: async (options: Docker.ExecCreateOptions) => {
+      const cmd = options.Cmd ?? [];
+      commands.push(cmd);
+      return {
+        start: async () => {
+          if (cmd[1] === "-lc") {
+            setImmediate(() => commandStream.write("working"));
+            return commandStream;
+          }
+          // The workload dies once it is signalled.
+          commandStream.end();
+          return new PassThrough();
+        },
+        inspect: async () => ({ ExitCode: 137 }),
+      };
+    },
+    kill: async () => {
+      killed = true;
+    },
+  };
+  const docker = {
+    getContainer: () => container,
+    modem: { demuxStream: demux },
+  } as unknown as Docker;
+  const sandbox = new DockerSandbox({ docker, commandTimeoutMs: 20 });
+
+  const result = await sandbox.runCommand(
+    "slow",
+    "sleep 600",
+    new AbortController().signal,
+  );
+
+  assert.equal(result.timedOut, true);
+  assert.equal(result.exitCode, 137);
+  assert.equal(result.stdout, "working");
+  assert.equal(killed, false);
+  assert.deepEqual(commands[1], stopWorkloadCommand);
 });
 
 void test("lists and removes only managed containers that are not kept", async () => {
@@ -403,3 +503,17 @@ void test(
     );
   },
 );
+
+function demux(
+  source: PassThrough,
+  stdout: PassThrough,
+  stderr: PassThrough,
+): void {
+  source.pipe(stdout);
+  source.once("end", () => stderr.end());
+}
+
+// Lets the exec calls made behind an abort or a deadline reach the fake.
+function settle(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
