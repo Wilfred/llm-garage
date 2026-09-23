@@ -28,21 +28,25 @@ const starterModels: Array<Omit<Model, "createdAt">> = [
   {
     id: "openai/gpt-5.6-sol",
     name: "GPT-5.6 Sol",
+    provider: "openrouter",
     effort: "medium",
   },
   {
     id: "anthropic/claude-opus-5",
     name: "Claude Opus 5",
+    provider: "openrouter",
     effort: "medium",
   },
   {
     id: "moonshotai/kimi-k3",
     name: "Kimi K3",
+    provider: "openrouter",
     effort: "medium",
   },
   {
     id: "z-ai/glm-5.2",
     name: "GLM 5.2",
+    provider: "openrouter",
     effort: "medium",
   },
 ];

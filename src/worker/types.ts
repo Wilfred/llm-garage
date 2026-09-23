@@ -1,4 +1,4 @@
-import type { ModelEffort } from "../models";
+import type { ModelEffort, ModelProvider } from "../models";
 import type { CommandResult } from "../sandbox/types";
 import type { TokenUsage } from "../usage";
 
@@ -20,13 +20,19 @@ export type ConversationMessage =
   | { role: "tool"; tool_call_id: string; content: string };
 
 export type GarageSettings = {
-  models: Array<{ id: string; name: string; effort: string }>;
+  models: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    effort: string;
+  }>;
   repos: Array<{ owner: string; name: string; defaultBranch: string }>;
 };
 
 export type WorkerContext = {
   modelId: string;
   modelName: string;
+  provider: ModelProvider;
   effort: ModelEffort;
   messages: ConversationMessage[];
   signal: AbortSignal;

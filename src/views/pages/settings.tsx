@@ -16,6 +16,11 @@ const settings = [
     title: "Models",
     description: "Manage the models available for trajectories.",
   },
+  {
+    href: "/chatgpt",
+    title: "ChatGPT",
+    description: "Sign in to run models on a ChatGPT subscription.",
+  },
 ];
 
 export function SettingsPage() {

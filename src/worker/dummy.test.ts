@@ -10,6 +10,7 @@ void test("emits a short model and tool conversation before completing", async (
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "Test Model",
+    provider: "openrouter",
     effort: "medium",
     messages: [{ role: "user", content: "Improve the example" }],
     signal: new AbortController().signal,
@@ -46,6 +47,7 @@ void test("stops without emitting more events when cancelled", async () => {
   const running = worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "Test Model",
+    provider: "openrouter",
     effort: "medium",
     messages: [{ role: "user", content: "Wait" }],
     signal: controller.signal,

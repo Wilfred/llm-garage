@@ -1,6 +1,8 @@
 import {
   defaultModelEffort,
   modelEfforts,
+  modelProviderNames,
+  modelProviders,
   type ModelEffort,
 } from "../../models";
 import type { Model, Trajectory } from "../../store/types";
@@ -56,7 +58,9 @@ export function ModelsPage({
                     >
                       {model.name}
                     </a>
-                    <div class="muted small">{model.id}</div>
+                    <div class="muted small">
+                      {modelProviderNames[model.provider]} · {model.id}
+                    </div>
                   </td>
                   <td>{model.effort}</td>
                   <td>
@@ -80,7 +84,7 @@ export function NewModelPage({
   values,
   error,
 }: {
-  values?: { id: string; name: string; effort: string };
+  values?: { id: string; name: string; provider: string; effort: string };
   error?: string;
 }) {
   return (
@@ -93,11 +97,18 @@ export function NewModelPage({
       <h1 class="page-intro">Add model</h1>
       {error && <div class="notice">{error}</div>}
       <form class="card stack form-card" method="post" action="/models">
+        <select name="provider" required aria-label="Provider">
+          {modelProviders.map((provider) => (
+            <option value={provider} selected={provider === values?.provider}>
+              {modelProviderNames[provider]}
+            </option>
+          ))}
+        </select>
         <input
           name="id"
           required
-          aria-label="OpenRouter model id"
-          placeholder="anthropic/claude-opus-5"
+          aria-label="Model id"
+          placeholder="anthropic/claude-opus-5 or gpt-5.5"
           value={values?.id ?? ""}
           autocomplete="off"
         />
@@ -146,7 +157,7 @@ export function ModelDetailPage({
       {notice && <div class="notice">{notice}</div>}
       <div class="grid grid-3 repo-stats">
         <section class="card">
-          <h2>OpenRouter id</h2>
+          <h2>{modelProviderNames[model.provider]} id</h2>
           <div class="stat-value">{model.id}</div>
         </section>
         <section class="card">

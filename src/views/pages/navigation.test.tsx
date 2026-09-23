@@ -195,14 +195,15 @@ void test("lists models sorted alphabetically by name", () => {
   );
 });
 
-void test("offers every OpenRouter effort level when adding a model", () => {
+void test("offers every provider and effort level when adding a model", () => {
   const html = renderPage(<NewModelPage />);
 
   assert.match(
     html,
     /<form class="card stack form-card" method="post" action="\/models">/,
   );
-  assert.match(html, /placeholder="anthropic\/claude-opus-5"/);
+  assert.match(html, /<option value="openrouter">OpenRouter<\/option>/);
+  assert.match(html, /<option value="chatgpt">ChatGPT subscription<\/option>/);
   for (const effort of ["minimal", "low", "medium", "high"])
     assert.match(html, new RegExp(`value="${effort}"`));
   assert.match(html, /value="medium" selected/);

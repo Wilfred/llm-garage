@@ -1,7 +1,10 @@
 import { config } from "../config";
 import { createAppDataSource } from "../db/data-source";
 import { DatabaseDataStore } from "../store/db";
+import { ChatGptAuth } from "../chatgpt/auth";
+import { ChatGptWorker } from "../worker/chatgpt";
 import { OpenRouterWorker } from "../worker/openrouter";
+import { ProviderWorker } from "../worker/provider";
 import { WebTools } from "../worker/web-tools";
 import { DockerSandbox } from "../sandbox/docker";
 import Docker from "dockerode";
@@ -19,16 +22,29 @@ async function main(): Promise<void> {
     githubToken: config.GITHUB_TOKEN,
     commandTimeoutMs: config.COMMAND_TIMEOUT_SECONDS * 1000,
   });
-  const store = new DatabaseDataStore(dataSource, {
-    worker: new OpenRouterWorker({
-      apiKey: config.OPENROUTER_API_KEY,
-      webTools: new WebTools({ braveApiKey: config.BRAVE_SEARCH_API_KEY }),
+  const webTools = new WebTools({ braveApiKey: config.BRAVE_SEARCH_API_KEY });
+  // The store's worker needs the ChatGPT sign-in, which keeps its tokens in
+  // the store.
+  const chatGptAuth = new ChatGptAuth({
+    settings: {
+      getSetting: (key) => store.getSetting(key),
+      setSetting: (key, value) => store.setSetting(key, value),
+      deleteSetting: (key) => store.deleteSetting(key),
+    },
+  });
+  const store: DatabaseDataStore = new DatabaseDataStore(dataSource, {
+    worker: new ProviderWorker({
+      openrouter: new OpenRouterWorker({
+        apiKey: config.OPENROUTER_API_KEY,
+        webTools,
+      }),
+      chatgpt: new ChatGptWorker({ auth: chatGptAuth, webTools }),
     }),
     sandbox,
     maxRunning: config.MAX_RUNNING_TRAJECTORIES,
   });
   await store.initialize();
-  const app = createApp(dataSource, store, sandbox);
+  const app = createApp(dataSource, store, sandbox, chatGptAuth);
 
   let server: Server;
   try {

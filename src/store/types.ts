@@ -1,10 +1,11 @@
-import type { ModelEffort } from "../models";
+import type { ModelEffort, ModelProvider } from "../models";
 import type { TokenUsage } from "../usage";
 
 export type Model = {
-  // The OpenRouter model slug, such as "anthropic/claude-opus-5".
+  // The provider's model slug, such as "anthropic/claude-opus-5".
   id: string;
   name: string;
+  provider: ModelProvider;
   effort: ModelEffort;
   createdAt: Date;
 };
@@ -85,7 +86,10 @@ export type RunEvent = {
   ts: Date;
 };
 
-export type CreateModelInput = Pick<Model, "id" | "name" | "effort">;
+export type CreateModelInput = Pick<
+  Model,
+  "id" | "name" | "provider" | "effort"
+>;
 
 export type UpdateModelInput = Pick<Model, "name" | "effort">;
 
@@ -120,6 +124,7 @@ export type SpendReport = SpendTotals & {
 export interface DataStore {
   getSetting(key: string): Promise<string | undefined>;
   setSetting(key: string, value: string): Promise<void>;
+  deleteSetting(key: string): Promise<void>;
 
   listModels(): Promise<Model[]>;
   getModel(id: string): Promise<Model | undefined>;

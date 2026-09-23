@@ -28,6 +28,7 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
   await worker.run({
     modelId: "anthropic/claude-opus-5",
     modelName: "Claude Opus 5",
+    provider: "openrouter",
     effort: "medium",
     messages: [
       { role: "user", content: "First question" },
@@ -135,6 +136,7 @@ void test("sets the trajectory name when requested by the model", async () => {
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "GPT-5.6 Sol",
+    provider: "openrouter",
     effort: "medium",
     messages: [{ role: "user", content: "Improve the search page" }],
     signal: new AbortController().signal,
@@ -226,6 +228,7 @@ void test("fetches URLs and searches Brave when requested by the model", async (
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "GPT-5.6 Sol",
+    provider: "openrouter",
     effort: "medium",
     messages: [{ role: "user", content: "Research example.com" }],
     signal: new AbortController().signal,
@@ -302,6 +305,7 @@ void test("runs model-requested shell commands and returns their output", async 
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "GPT-5.6 Sol",
+    provider: "openrouter",
     effort: "medium",
     messages: [{ role: "user", content: "List the container root" }],
     signal: new AbortController().signal,
@@ -386,6 +390,7 @@ void test("reports OpenRouter API errors", async () => {
     worker.run({
       modelId: "openai/gpt-5.6-sol",
       modelName: "GPT-5.6 Sol",
+      provider: "openrouter",
       effort: "medium",
       messages: [{ role: "user", content: "Hello" }],
       signal: new AbortController().signal,
@@ -410,6 +415,7 @@ void test("requires an API key before making a request", async () => {
     worker.run({
       modelId: "openai/gpt-5.6-sol",
       modelName: "GPT-5.6 Sol",
+      provider: "openrouter",
       effort: "medium",
       messages: [{ role: "user", content: "Hello" }],
       signal: new AbortController().signal,
@@ -456,12 +462,18 @@ void test("reports garage settings when requested by the model", async () => {
   await worker.run({
     modelId: "openai/gpt-5.6-sol",
     modelName: "GPT-5.6 Sol",
+    provider: "openrouter",
     effort: "medium",
     messages: [{ role: "user", content: "What models are configured?" }],
     signal: new AbortController().signal,
     garageSettings: async () => ({
       models: [
-        { id: "openai/gpt-5.6-sol", name: "GPT-5.6 Sol", effort: "medium" },
+        {
+          id: "openai/gpt-5.6-sol",
+          name: "GPT-5.6 Sol",
+          provider: "openrouter",
+          effort: "medium",
+        },
       ],
       repos: [{ owner: "example", name: "demo", defaultBranch: "main" }],
     }),
@@ -477,7 +489,12 @@ void test("reports garage settings when requested by the model", async () => {
     tool_call_id: "settings-1",
     content: JSON.stringify({
       models: [
-        { id: "openai/gpt-5.6-sol", name: "GPT-5.6 Sol", effort: "medium" },
+        {
+          id: "openai/gpt-5.6-sol",
+          name: "GPT-5.6 Sol",
+          provider: "openrouter",
+          effort: "medium",
+        },
       ],
       repos: [{ owner: "example", name: "demo", defaultBranch: "main" }],
     }),

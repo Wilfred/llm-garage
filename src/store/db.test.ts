@@ -89,12 +89,14 @@ void test("persists model CRUD and keeps models used by trajectories", async (t)
   const created = await store.createModel({
     id: "deepseek/deepseek-r2",
     name: "DeepSeek R2",
+    provider: "openrouter",
     effort: "high",
   });
   await assert.rejects(
     store.createModel({
       id: created.id,
       name: "Duplicate",
+      provider: "openrouter",
       effort: "low",
     }),
     ModelAlreadyExistsError,

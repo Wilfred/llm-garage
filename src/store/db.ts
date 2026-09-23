@@ -113,6 +113,10 @@ export class DatabaseDataStore implements DataStore {
     await this.settingRepository.save({ key, value });
   }
 
+  async deleteSetting(key: string): Promise<void> {
+    await this.settingRepository.delete({ key });
+  }
+
   async listModels(): Promise<Model[]> {
     return this.modelRepository.find({ order: { createdAt: "ASC" } });
   }
@@ -600,6 +604,7 @@ export class DatabaseDataStore implements DataStore {
         await this.worker.run({
           modelId: model.id,
           modelName: model.name,
+          provider: model.provider,
           effort: model.effort,
           messages,
           signal: controller.signal,
@@ -613,9 +618,10 @@ export class DatabaseDataStore implements DataStore {
               this.listRepos(),
             ]);
             return {
-              models: models.map(({ id, name, effort }) => ({
+              models: models.map(({ id, name, provider, effort }) => ({
                 id,
                 name,
+                provider,
                 effort,
               })),
               repos: repos.map(({ owner, name, defaultBranch }) => ({
