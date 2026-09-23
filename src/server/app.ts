@@ -2,6 +2,7 @@ import path from "node:path";
 import express, { type Express } from "express";
 import { h } from "preact";
 import type { DataSource } from "typeorm";
+import { ChatGptAuth } from "../chatgpt/auth";
 import {
   DisabledContainerManager,
   type ContainerManager,
@@ -9,6 +10,7 @@ import {
 import type { DataStore } from "../store/types";
 import { NotFoundPage } from "../views/pages/trajectories";
 import { renderPage } from "../views/render";
+import { createChatGptRouter } from "./routes/chatgpt";
 import { createHealthRouter } from "./routes/health";
 import { createContainersRouter } from "./routes/containers";
 import { createModelsRouter } from "./routes/models";
@@ -20,12 +22,14 @@ export function createApp(
   dataSource: DataSource,
   store: DataStore,
   containers: ContainerManager = new DisabledContainerManager(),
+  chatGptAuth = new ChatGptAuth({ settings: store }),
 ): Express {
   const app = express();
 
   app.use(express.static(path.resolve(__dirname, "../../public")));
   app.use(express.urlencoded({ extended: false }));
   app.use(createPagesRouter(store));
+  app.use(createChatGptRouter(chatGptAuth));
   app.use(createContainersRouter(store, containers));
   app.use(createModelsRouter(store));
   app.use(createReposRouter(store));

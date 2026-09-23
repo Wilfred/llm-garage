@@ -18,6 +18,8 @@ Loosely inspired by Claude Code Web and
   understanding agent behaviours).
 - Spawn multiple trajectories for the same prompt (for A/B comparing
   models).
+- Run models through OpenRouter, or through a ChatGPT subscription
+  after signing in under Settings.
 
 ## Planned Features
 
