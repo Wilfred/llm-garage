@@ -33,6 +33,7 @@ export function Layout({
           {title === "LLM Garage" ? title : `${title} · LLM Garage`}
         </title>
         <link rel="stylesheet" href="/styles.css" />
+        <script src="/copy.js" defer />
         {refreshSeconds && <script src="/refresh.js" defer />}
       </head>
       <body>

@@ -80,6 +80,8 @@ void test("sends a conversation to OpenRouter and emits its response", async () 
     [
       "set_trajectory_name",
       "garage_settings",
+      "list_trajectories",
+      "read_trajectory",
       "run_command",
       "fetch_url",
       "search_web",
@@ -481,5 +483,85 @@ void test("reports garage settings when requested by the model", async () => {
       ],
       repos: [{ owner: "example", name: "demo", defaultBranch: "main" }],
     }),
+  });
+});
+
+void test("lists trajectories and pages through a transcript", async () => {
+  const toolCall = (id: string, name: string, args: object) => ({
+    choices: [
+      {
+        message: {
+          content: null,
+          tool_calls: [
+            {
+              id,
+              type: "function",
+              function: { name, arguments: JSON.stringify(args) },
+            },
+          ],
+        },
+      },
+    ],
+  });
+  const responses = [
+    toolCall("list-1", "list_trajectories", {}),
+    toolCall("read-1", "read_trajectory", { id: "trajectory-1" }),
+    toolCall("read-2", "read_trajectory", {
+      id: "trajectory-1",
+      offset: 50_000,
+    }),
+    toolCall("read-3", "read_trajectory", { id: "missing" }),
+    { choices: [{ message: { content: "Reviewed." } }] },
+  ];
+  const requests: Array<{
+    messages: Array<{ role: string; content: string }>;
+  }> = [];
+  const worker = new OpenRouterWorker({
+    apiKey: "test-key",
+    fetch: async (_input, init) => {
+      requests.push(JSON.parse(init?.body as string) as (typeof requests)[0]);
+      return Response.json(responses.shift());
+    },
+  });
+  const summary = {
+    id: "trajectory-1",
+    title: "Fix the parser",
+    status: "succeeded",
+    model: "GPT-5.6 Sol",
+    repo: "example/parser",
+    createdAt: "2026-09-06T10:00:00.000Z",
+    updatedAt: "2026-09-06T10:00:00.000Z",
+  };
+  const transcript = "a".repeat(50_000) + "tail";
+
+  await worker.run({
+    modelId: "openai/gpt-5.6-sol",
+    modelName: "GPT-5.6 Sol",
+    effort: "medium",
+    messages: [{ role: "user", content: "Review the other trajectory" }],
+    signal: new AbortController().signal,
+    listTrajectories: async () => [summary],
+    trajectoryTranscript: async (id) =>
+      id === "trajectory-1" ? transcript : undefined,
+    emit: () => undefined,
+    appendMessage: () => undefined,
+  });
+
+  const toolResult = (index: number): unknown =>
+    JSON.parse(requests[index]?.messages.at(-1)?.content ?? "null");
+  assert.deepEqual(toolResult(1), [summary]);
+  assert.deepEqual(toolResult(2), {
+    id: "trajectory-1",
+    totalLength: 50_004,
+    nextOffset: 50_000,
+    transcript: "a".repeat(50_000),
+  });
+  assert.deepEqual(toolResult(3), {
+    id: "trajectory-1",
+    totalLength: 50_004,
+    transcript: "tail",
+  });
+  assert.deepEqual(toolResult(4), {
+    error: "No trajectory with ID missing",
   });
 });

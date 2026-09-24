@@ -1,10 +1,5 @@
-import type {
-  Model,
-  Repo,
-  RunEvent,
-  Trajectory,
-  Turn,
-} from "../../store/types";
+import type { Model, Repo, RunEvent, Trajectory } from "../../store/types";
+import type { TurnTranscript } from "../../transcript";
 import { sumUsage } from "../../usage";
 import { TrajectoryCards, StatusBadge, UsageSummary } from "../components";
 import { Layout } from "../layout";
@@ -93,8 +88,6 @@ export function NewTrajectoryPage({
   );
 }
 
-export type TurnTranscript = { turn: Turn; events: RunEvent[] };
-
 export function TrajectoryDetailPage({
   trajectory,
   transcript,
@@ -134,6 +127,14 @@ export function TrajectoryDetailPage({
           {model?.name ?? trajectory.modelId}
         </span>
         <div class="actions">
+          <a
+            class="button"
+            href={`/trajectories/${trajectory.id}/transcript`}
+            aria-label="Copy transcript"
+            data-copy-transcript
+          >
+            Copy
+          </a>
           {canCancel && (
             <form
               method="post"

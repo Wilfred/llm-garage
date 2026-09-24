@@ -11,8 +11,10 @@ import { TurnEntity } from "../entities/turn";
 import { DisabledSandbox, type Sandbox } from "../sandbox/types";
 import { addUsage, sumUsage, type TokenUsage } from "../usage";
 import { DummyWorker } from "../worker/dummy";
+import { loadTrajectoryTranscript } from "../transcript";
 import type {
   ConversationMessage,
+  TrajectorySummary,
   TrajectoryWorker,
   WorkerEvent,
 } from "../worker/types";
@@ -625,6 +627,8 @@ export class DatabaseDataStore implements DataStore {
               })),
             };
           },
+          listTrajectories: () => this.trajectorySummaries(),
+          trajectoryTranscript: (id) => loadTrajectoryTranscript(this, id),
           emit: (event) => {
             writes = writes.then(() =>
               this.recordWorkerEvent(trajectoryId, turnId, event),
@@ -664,6 +668,35 @@ export class DatabaseDataStore implements DataStore {
         this.activeWorkers.delete(trajectoryId);
       }
     }
+  }
+
+  private async trajectorySummaries(): Promise<TrajectorySummary[]> {
+    const [trajectories, models, repos] = await Promise.all([
+      this.listTrajectories(),
+      this.listModels(),
+      this.listRepos(),
+    ]);
+    return trajectories.map((trajectory) => {
+      const repo = repos.find(({ id }) => id === trajectory.repoId);
+      return {
+        id: trajectory.id,
+        title: trajectory.title,
+        status: trajectory.status,
+        model:
+          models.find(({ id }) => id === trajectory.modelId)?.name ??
+          trajectory.modelId,
+        repo: repo ? `${repo.owner}/${repo.name}` : trajectory.repoId,
+        ...(trajectory.parentId === undefined
+          ? {}
+          : { parentId: trajectory.parentId }),
+        ...(trajectory.comparisonId === undefined
+          ? {}
+          : { comparisonId: trajectory.comparisonId }),
+        ...(trajectory.prUrl === undefined ? {} : { prUrl: trajectory.prUrl }),
+        createdAt: trajectory.createdAt.toISOString(),
+        updatedAt: trajectory.updatedAt.toISOString(),
+      };
+    });
   }
 
   // A rebuilt container comes back with a fresh clone, so a trajectory that had
