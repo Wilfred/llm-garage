@@ -15,7 +15,7 @@ export function createReposRouter(store: DataStore): Router {
 
   router.get("/repos", async (req, res) => {
     const [repos, trajectories] = await Promise.all([
-      store.listRepos(),
+      store.listAllRepos(),
       store.listTrajectories(),
     ]);
     const notice = queryString(req.query["notice"]);
@@ -95,6 +95,16 @@ export function createReposRouter(store: DataStore): Router {
           />,
         ),
       );
+  });
+
+  router.post("/repos/:id/archive", async (req, res) => {
+    await store.setRepoArchived(req.params.id, true);
+    res.redirect(303, noticeUrl("/repos", "Archived repository."));
+  });
+
+  router.post("/repos/:id/unarchive", async (req, res) => {
+    await store.setRepoArchived(req.params.id, false);
+    res.redirect(303, noticeUrl("/repos", "Unarchived repository."));
   });
 
   router.post("/repos/:id/delete", async (req, res) => {

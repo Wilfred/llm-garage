@@ -74,6 +74,33 @@ void test("persists repository CRUD across data source restarts", async (t) => {
   assert.equal((await store.listRepos()).length, 3);
 });
 
+void test("archives and unarchives repositories out of the visible list", async (t) => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-archive-"));
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const store = new DatabaseDataStore(dataSource, { seed: false });
+  await store.initialize();
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "archived-project",
+    defaultBranch: "main",
+  });
+
+  assert.equal(await store.listRepos().then((repos) => repos.length), 1);
+  assert.equal(await store.setRepoArchived(repo.id, true), true);
+  assert.equal(await store.listRepos().then((repos) => repos.length), 0);
+  const archived = await store.getRepo(repo.id);
+  assert.ok(archived?.archivedAt);
+  assert.equal(await store.setRepoArchived(repo.id, true), false);
+  assert.equal(await store.setRepoArchived(repo.id, false), true);
+  assert.equal((await store.getRepo(repo.id))?.archivedAt, undefined);
+  assert.equal(await store.setRepoArchived("missing", true), false);
+});
+
 void test("persists model CRUD and keeps models used by trajectories", async (t) => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), "llm-garage-models-"));
   let dataSource = createAppDataSource(dataDir);
