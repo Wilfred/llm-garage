@@ -14,6 +14,7 @@ export type Repo = {
   owner: string;
   name: string;
   defaultBranch: string;
+  archivedAt?: Date;
   createdAt: Date;
 };
 
@@ -128,8 +129,11 @@ export interface DataStore {
   deleteModel(id: string): Promise<DeleteModelResult>;
 
   listRepos(): Promise<Repo[]>;
+  // Includes archived repositories, which listRepos() omits.
+  listAllRepos(): Promise<Repo[]>;
   getRepo(id: string): Promise<Repo | undefined>;
   createRepo(input: CreateRepoInput): Promise<Repo>;
+  setRepoArchived(id: string, archived: boolean): Promise<boolean>;
   deleteRepo(id: string): Promise<DeleteRepoResult>;
 
   listTrajectories(): Promise<Trajectory[]>;

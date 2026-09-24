@@ -288,6 +288,10 @@ code {
 .button-danger {
   color: var(--red);
 }
+.button-small {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
 .button:disabled {
   opacity: 0.45;
   cursor: not-allowed;

@@ -154,11 +154,22 @@ export class DatabaseDataStore implements DataStore {
   }
 
   async listRepos(): Promise<Repo[]> {
-    return this.repoRepository.find({ order: { createdAt: "DESC" } });
+    const repos = await this.repoRepository.find({
+      order: { createdAt: "DESC" },
+    });
+    return repos.filter((repo) => !repo.archivedAt).map(toRepo);
+  }
+
+  async listAllRepos(): Promise<Repo[]> {
+    const repos = await this.repoRepository.find({
+      order: { createdAt: "DESC" },
+    });
+    return repos.map(toRepo);
   }
 
   async getRepo(id: string): Promise<Repo | undefined> {
-    return (await this.repoRepository.findOneBy({ id })) ?? undefined;
+    const repo = await this.repoRepository.findOneBy({ id });
+    return repo ? toRepo(repo) : undefined;
   }
 
   async createRepo(input: CreateRepoInput): Promise<Repo> {
@@ -168,13 +179,23 @@ export class DatabaseDataStore implements DataStore {
     });
     if (existing) throw new RepoAlreadyExistsError(input.owner, input.name);
 
-    return this.repoRepository.save(
-      this.repoRepository.create({
-        id: randomUUID(),
-        ...input,
-        createdAt: new Date(),
-      }),
-    );
+    const created = this.repoRepository.create({
+      id: randomUUID(),
+      ...input,
+      archivedAt: null,
+      createdAt: new Date(),
+    });
+    await this.repoRepository.save(created);
+    return toRepo(created);
+  }
+
+  async setRepoArchived(id: string, archived: boolean): Promise<boolean> {
+    const repo = await this.repoRepository.findOneBy({ id });
+    if (!repo) return false;
+    if (archived === (repo.archivedAt !== null)) return false;
+    repo.archivedAt = archived ? this.now() : null;
+    await this.repoRepository.save(repo);
+    return true;
   }
 
   async deleteRepo(id: string): Promise<DeleteRepoResult> {
@@ -201,7 +222,7 @@ export class DatabaseDataStore implements DataStore {
   async getSpend(): Promise<SpendReport> {
     const [models, repos, trajectories, turns] = await Promise.all([
       this.listModels(),
-      this.listRepos(),
+      this.listAllRepos(),
       this.listTrajectories(),
       this.turnRepository.find({
         select: {
@@ -1035,6 +1056,17 @@ function legacyTurnMessages(
     { role: "user", content: turn.prompt },
     ...(output ? [{ role: "assistant" as const, content: output }] : []),
   ];
+}
+
+function toRepo(entity: RepoEntity): Repo {
+  return {
+    id: entity.id,
+    owner: entity.owner,
+    name: entity.name,
+    defaultBranch: entity.defaultBranch,
+    ...(entity.archivedAt === null ? {} : { archivedAt: entity.archivedAt }),
+    createdAt: entity.createdAt,
+  };
 }
 
 function toTrajectory(entity: TrajectoryEntity): Trajectory {
