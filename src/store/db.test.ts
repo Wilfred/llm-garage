@@ -1201,3 +1201,58 @@ void test("replays trajectories that predate the conversation log", async (t) =>
     { role: "user", content: "Follow-up question" },
   ]);
 });
+
+void test("lets a worker list trajectories and read their transcripts", async (t) => {
+  const dataDir = await mkdtemp(
+    path.join(os.tmpdir(), "llm-garage-trajectory-tools-"),
+  );
+  const dataSource = createAppDataSource(dataDir);
+  t.after(async () => {
+    if (dataSource.isInitialized) await dataSource.destroy();
+    await rm(dataDir, { recursive: true, force: true });
+  });
+  await dataSource.initialize();
+  const seen: { listed: string[]; transcript?: string } = { listed: [] };
+  const store = new DatabaseDataStore(dataSource, {
+    seed: false,
+    worker: {
+      run: async (context) => {
+        const listed = (await context.listTrajectories?.()) ?? [];
+        const first = listed.at(-1);
+        const transcript = first
+          ? await context.trajectoryTranscript?.(first.id)
+          : undefined;
+        seen.listed = listed.map(({ title }) => title);
+        if (transcript !== undefined) seen.transcript = transcript;
+        context.emit({ kind: "model_output", data: "Reviewed" });
+      },
+    },
+  });
+  await seedModels(store);
+  const repo = await store.createRepo({
+    owner: "example",
+    name: "tools-project",
+    defaultBranch: "main",
+  });
+  const first = await createOne(store, {
+    repoId: repo.id,
+    title: "First",
+    modelIds: ["openai/gpt-5.6-sol"],
+    taskPrompt: "Do the first thing",
+  });
+  await waitForStatus(store, first.id, "succeeded");
+  const second = await createOne(store, {
+    repoId: repo.id,
+    title: "Second",
+    modelIds: ["openai/gpt-5.6-sol"],
+    taskPrompt: "Review the first thing",
+  });
+  await waitForStatus(store, second.id, "succeeded");
+
+  assert.deepEqual(seen.listed, ["Second", "First"]);
+  const transcript = seen.transcript ?? "";
+  assert.match(transcript, /^# First\n/);
+  assert.match(transcript, /Repository: example\/tools-project/);
+  assert.match(transcript, /Do the first thing/);
+  assert.match(transcript, /model_output\n\nReviewed/);
+});

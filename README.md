@@ -16,6 +16,7 @@ Loosely inspired by Claude Code Web and
   PR (for coding tasks).
 - View the full details of the agent's trajectory and cost (for
   understanding agent behaviours).
+- Copy a trajectory's full transcript, to have another model review it.
 - Spawn multiple trajectories for the same prompt (for A/B comparing
   models).
 
@@ -36,6 +37,7 @@ Loosely inspired by Claude Code Web and
 - Search the web (using the Brave API)
 - Set the name of the current trajectory
 - See the models and repos configured in this instance
+- List trajectories in this instance and read their transcripts
 
 ## Development
 
