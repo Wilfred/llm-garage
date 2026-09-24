@@ -55,6 +55,9 @@ Repositories and trajectories are stored in SQLite at
 
 ## Security
 
+Set the `AUTH_*` variables in `.env` (see `.env.example`) to require
+GitHub sign in for everything except the homepage and about page.
+
 Each session gets a Docker container to work inside, with a memory
 limit, a disk storage limit, and a time limit on each command. Its
 only external permissions are the GitHub token provided

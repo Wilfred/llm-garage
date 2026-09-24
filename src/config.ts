@@ -8,6 +8,15 @@ const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().trim().min(1).optional(),
   BRAVE_SEARCH_API_KEY: z.string().trim().min(1).optional(),
   GITHUB_TOKEN: z.string().trim().min(1).optional(),
+  AUTH_SECRET: z.string().trim().min(1).optional(),
+  AUTH_GITHUB_ID: z.string().trim().min(1).optional(),
+  AUTH_GITHUB_SECRET: z.string().trim().min(1).optional(),
+  AUTH_GITHUB_USERS: z
+    .string()
+    .trim()
+    .min(1)
+    .transform((users) => users.split(",").map((user) => user.trim()))
+    .optional(),
   DOCKER_SOCKET: z.string().min(1).default("/var/run/docker.sock"),
   WORKER_IMAGE: z.string().min(1).default("ghcr.io/wilfred/llm-garage:worker"),
   MAX_RUNNING_TRAJECTORIES: z.coerce.number().int().positive().default(2),
