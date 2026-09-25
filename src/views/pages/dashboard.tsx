@@ -14,14 +14,8 @@ export function DashboardPage({
   const active = trajectories.filter(
     ({ status }) => status === "running" || status === "queued",
   );
-  const awaiting = trajectories.filter(
-    ({ status }) => status === "awaiting_feedback",
-  );
   const recent = trajectories
-    .filter(
-      ({ status }) =>
-        !["running", "queued", "awaiting_feedback"].includes(status),
-    )
+    .filter(({ status }) => !["running", "queued"].includes(status))
     .slice(0, 6);
 
   return (
@@ -33,17 +27,6 @@ export function DashboardPage({
           <span class="count">{active.length} in progress</span>
         </div>
         <TrajectoryCards trajectories={active} repos={repos} models={models} />
-      </section>
-      <section class="dashboard-section">
-        <div class="section-heading">
-          <h2>Awaiting your feedback</h2>
-          <span class="count">{awaiting.length} ready to review</span>
-        </div>
-        <TrajectoryCards
-          trajectories={awaiting}
-          repos={repos}
-          models={models}
-        />
       </section>
       <section class="dashboard-section">
         <div class="section-heading">

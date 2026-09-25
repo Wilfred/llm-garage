@@ -36,7 +36,7 @@ const trajectories: Trajectory[] = [
     "trajectory-idle",
     "Tighten dashboard navigation",
     "repo-garage",
-    "awaiting_feedback",
+    "succeeded",
     "anthropic/claude-opus-5",
   ),
   trajectory(
@@ -424,7 +424,6 @@ void test("maps internal trajectory states to user-facing states", () => {
   assert.equal(trajectoryDisplayStatus("archived"), "archive");
   for (const status of [
     "queued",
-    "awaiting_feedback",
     "succeeded",
     "cancelled",
   ] satisfies TrajectoryStatus[]) {
@@ -692,7 +691,6 @@ function trajectory(
   const createdAt = new Date("2026-09-06T10:00:00Z");
   return {
     id,
-    rootId: id,
     repoId,
     title,
     status,

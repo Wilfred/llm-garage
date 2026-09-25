@@ -14,7 +14,7 @@ void test("keeps running and queued trajectories when removing idle containers",
     trajectory("running", "running"),
     trajectory("queued", "queued"),
     trajectory("finished", "succeeded"),
-    trajectory("awaiting", "awaiting_feedback"),
+    trajectory("archived", "archived"),
   ]);
 
   assert.deepEqual([...activeIds], ["running", "queued"]);
@@ -89,7 +89,6 @@ function trajectory(id: string, status: Trajectory["status"]): Trajectory {
   const timestamp = new Date("2026-09-06T12:00:00Z");
   return {
     id,
-    rootId: id,
     repoId: "repo-garage",
     title: id,
     status,
