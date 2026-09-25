@@ -8,7 +8,8 @@ import { SpendPage } from "../../views/pages/spend";
 import { SettingsPage } from "../../views/pages/settings";
 import { renderPage } from "../../views/render";
 
-export function createPagesRouter(store: DataStore): Router {
+// Pages visible without signing in.
+export function createPublicPagesRouter(store: DataStore): Router {
   const router = Router();
   const buildInfo = loadBuildInfo();
 
@@ -31,15 +32,6 @@ export function createPagesRouter(store: DataStore): Router {
       );
   });
 
-  router.get("/spend", async (_req, res) => {
-    const spend = await store.getSpend();
-    res.type("html").send(renderPage(<SpendPage spend={spend} />));
-  });
-
-  router.get("/settings", (_req, res) => {
-    res.type("html").send(renderPage(<SettingsPage />));
-  });
-
   router.get("/about", (_req, res) => {
     res
       .type("html")
@@ -52,6 +44,21 @@ export function createPagesRouter(store: DataStore): Router {
           />,
         ),
       );
+  });
+
+  return router;
+}
+
+export function createPagesRouter(store: DataStore): Router {
+  const router = Router();
+
+  router.get("/spend", async (_req, res) => {
+    const spend = await store.getSpend();
+    res.type("html").send(renderPage(<SpendPage spend={spend} />));
+  });
+
+  router.get("/settings", (_req, res) => {
+    res.type("html").send(renderPage(<SettingsPage />));
   });
 
   return router;
