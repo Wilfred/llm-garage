@@ -20,7 +20,6 @@ export type Repo = {
 export const trajectoryStatuses = [
   "queued",
   "running",
-  "awaiting_feedback",
   "succeeded",
   "failed",
   "cancelled",
@@ -30,8 +29,6 @@ export type TrajectoryStatus = (typeof trajectoryStatuses)[number];
 
 export type Trajectory = {
   id: string;
-  parentId?: string;
-  rootId: string;
   comparisonId?: string;
   repoId: string;
   title: string;
@@ -43,7 +40,7 @@ export type Trajectory = {
   updatedAt: Date;
 };
 
-export const turnKinds = ["initial", "feedback", "spawn"] as const;
+export const turnKinds = ["initial", "feedback"] as const;
 export type TurnKind = (typeof turnKinds)[number];
 export const turnStatuses = [
   "queued",
@@ -95,7 +92,6 @@ export type CreateRepoInput = Pick<Repo, "owner" | "name" | "defaultBranch">;
 
 export type CreateTrajectoriesInput = {
   repoId: string;
-  parentId?: string;
   title: string;
   modelIds: string[];
   taskPrompt: string;

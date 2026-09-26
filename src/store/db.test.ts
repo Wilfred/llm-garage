@@ -533,7 +533,7 @@ void test("leaves a single-model trajectory out of any comparison", async (t) =>
   );
 });
 
-void test("rejects invalid trajectory relationships without partial records", async (t) => {
+void test("rejects a trajectory for an unknown repository without partial records", async (t) => {
   const dataDir = await mkdtemp(
     path.join(os.tmpdir(), "llm-garage-trajectory-relations-"),
   );
@@ -560,39 +560,6 @@ void test("rejects invalid trajectory relationships without partial records", as
     /Repository not found/,
   );
   assert.deepEqual(await store.listTrajectories(), []);
-
-  const firstRepo = await store.createRepo({
-    owner: "example",
-    name: "first-project",
-    defaultBranch: "main",
-  });
-  const secondRepo = await store.createRepo({
-    owner: "example",
-    name: "second-project",
-    defaultBranch: "main",
-  });
-  const parent = await createOne(store, {
-    repoId: firstRepo.id,
-    title: "Parent",
-    modelIds: ["openai/gpt-5.6-sol"],
-    taskPrompt: "Create the parent",
-  });
-  await waitForStatus(store, parent.id, "succeeded");
-
-  await assert.rejects(
-    createOne(store, {
-      repoId: secondRepo.id,
-      parentId: parent.id,
-      title: "Invalid child",
-      modelIds: ["openai/gpt-5.6-sol"],
-      taskPrompt: "Cross repository boundaries",
-    }),
-    /different repository/,
-  );
-  assert.deepEqual(
-    (await store.listTrajectories()).map(({ id }) => id),
-    [parent.id],
-  );
 });
 
 void test("persists worker failures and their terminal events", async (t) => {
@@ -1161,8 +1128,6 @@ void test("replays trajectories that predate the conversation log", async (t) =>
   const turnId = "legacy-turn";
   await dataSource.getRepository(TrajectoryEntity).save({
     id: trajectoryId,
-    parentId: null,
-    rootId: trajectoryId,
     comparisonId: null,
     repoId: repo.id,
     title: "Legacy trajectory",

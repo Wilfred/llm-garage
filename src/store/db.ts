@@ -263,17 +263,6 @@ export class DatabaseDataStore implements DataStore {
         throw new Error("Repository not found");
       }
 
-      const parent = input.parentId
-        ? await manager
-            .getRepository(TrajectoryEntity)
-            .findOneBy({ id: input.parentId })
-        : null;
-      if (input.parentId && !parent)
-        throw new Error("Parent trajectory not found");
-      if (parent && parent.repoId !== input.repoId) {
-        throw new Error("Parent trajectory belongs to a different repository");
-      }
-
       const comparisonId = input.modelIds.length > 1 ? randomUUID() : null;
       const started: Array<{ trajectory: Trajectory; turnId: string }> = [];
       for (const modelId of input.modelIds) {
@@ -282,11 +271,8 @@ export class DatabaseDataStore implements DataStore {
           .findOneBy({ id: modelId });
         if (!model) throw new Error(`Unknown model: ${modelId}`);
         const now = this.now();
-        const id = randomUUID();
         const trajectory = await manager.getRepository(TrajectoryEntity).save({
-          id,
-          parentId: parent?.id ?? null,
-          rootId: parent?.rootId ?? id,
+          id: randomUUID(),
           comparisonId,
           repoId: input.repoId,
           title: input.title,
@@ -300,7 +286,7 @@ export class DatabaseDataStore implements DataStore {
         const turn = await manager.getRepository(TurnEntity).save({
           id: randomUUID(),
           trajectoryId: trajectory.id,
-          kind: parent ? "spawn" : "initial",
+          kind: "initial",
           prompt: input.taskPrompt,
           status: "queued",
           createdAt: now,
@@ -1040,8 +1026,6 @@ function legacyTurnMessages(
 function toTrajectory(entity: TrajectoryEntity): Trajectory {
   return {
     id: entity.id,
-    ...(entity.parentId === null ? {} : { parentId: entity.parentId }),
-    rootId: entity.rootId,
     ...(entity.comparisonId === null
       ? {}
       : { comparisonId: entity.comparisonId }),

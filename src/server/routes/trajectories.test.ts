@@ -38,7 +38,6 @@ function trajectory(id: string, repoId: string): Trajectory {
   const timestamp = new Date("2026-09-06T10:00:00Z");
   return {
     id,
-    rootId: id,
     repoId,
     title: id,
     status: "succeeded",
