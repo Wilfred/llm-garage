@@ -27,7 +27,7 @@ export function NewTrajectoryPage({
   defaultModelIds?: string[];
   error?: string;
 }) {
-  const checkedModelIds = selectedModelIds ?? defaultModelIds ?? [];
+  const selectedIds = selectedModelIds ?? defaultModelIds ?? [];
   const selected =
     selectedRepoId ??
     defaultRepoId ??
@@ -65,19 +65,22 @@ export function NewTrajectoryPage({
               </option>
             ))}
           </select>
-          <div class="check-row" role="group" aria-label="Models">
+          <select
+            class="model-picker"
+            name="modelIds"
+            multiple
+            required
+            aria-label="Models"
+          >
             {models.map((model) => (
-              <label class="check">
-                <input
-                  type="checkbox"
-                  name="modelIds"
-                  value={model.id}
-                  checked={checkedModelIds.includes(model.id)}
-                />
+              <option
+                value={model.id}
+                selected={selectedIds.includes(model.id)}
+              >
                 {model.name} · {model.effort} effort
-              </label>
+              </option>
             ))}
-          </div>
+          </select>
           <textarea
             name="taskPrompt"
             required

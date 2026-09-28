@@ -295,7 +295,12 @@ void test("renders the new-trajectory form", () => {
   assert.match(html, /placeholder="Describe the outcome you want…"/);
   assert.match(html, /Pick several to run the same task side by side\./);
   assert.match(html, />Start trajectory<\/button>/);
-  assert.equal(html.match(/name="modelIds"/g)?.length, 4);
+  assert.match(
+    html,
+    /<select class="model-picker" name="modelIds" multiple required aria-label="Models">/,
+  );
+  assert.doesNotMatch(html, /type="checkbox"/);
+  assert.equal(html.match(/name="modelIds"/g)?.length, 1);
   assert.match(html, /value="openai\/gpt-5\.6-sol"/);
   assert.match(html, /value="anthropic\/claude-opus-5"/);
   assert.match(html, /value="moonshotai\/kimi-k3"/);
