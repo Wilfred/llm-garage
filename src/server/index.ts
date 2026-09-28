@@ -6,12 +6,14 @@ import { WebTools } from "../worker/web-tools";
 import { DockerSandbox } from "../sandbox/docker";
 import Docker from "dockerode";
 import { createApp } from "./app";
+import type { AuthOptions } from "./auth";
 import type { Express } from "express";
 import type { Server } from "node:http";
 
 const dataSource = createAppDataSource(config.DATA_DIR);
 
 async function main(): Promise<void> {
+  const auth = authOptions();
   await dataSource.initialize();
   const sandbox = new DockerSandbox({
     docker: new Docker({ socketPath: config.DOCKER_SOCKET }),
@@ -28,7 +30,7 @@ async function main(): Promise<void> {
     maxRunning: config.MAX_RUNNING_TRAJECTORIES,
   });
   await store.initialize();
-  const app = createApp(dataSource, store, sandbox);
+  const app = createApp(dataSource, store, sandbox, auth);
 
   let server: Server;
   try {
@@ -42,6 +44,34 @@ async function main(): Promise<void> {
     `llm-garage listening on http://${config.HOST}:${config.PORT.toString()}`,
   );
   installShutdownHandlers(server);
+}
+
+function authOptions(): AuthOptions | undefined {
+  const {
+    AUTH_SECRET: secret,
+    AUTH_GITHUB_ID: clientId,
+    AUTH_GITHUB_SECRET: clientSecret,
+    AUTH_GITHUB_USERS: allowedUsers,
+  } = config;
+  if (!secret && !clientId && !clientSecret && !allowedUsers) {
+    if (!isLoopback(config.HOST)) {
+      throw new Error(
+        `GitHub sign in must be configured when listening on ${config.HOST}`,
+      );
+    }
+    console.warn("GitHub sign in is not configured; all pages are public");
+    return undefined;
+  }
+  if (!secret || !clientId || !clientSecret || !allowedUsers) {
+    throw new Error(
+      "GitHub sign in needs all of AUTH_SECRET, AUTH_GITHUB_ID, AUTH_GITHUB_SECRET and AUTH_GITHUB_USERS",
+    );
+  }
+  return { secret, clientId, clientSecret, allowedUsers };
+}
+
+function isLoopback(host: string): boolean {
+  return host === "localhost" || host === "::1" || host.startsWith("127.");
 }
 
 function listen(app: Express, port: number, host: string): Promise<Server> {

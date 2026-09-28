@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import { authState } from "../auth-state";
 
 export type NavigationSection = "settings" | "trajectories" | "spend";
 
@@ -23,6 +24,8 @@ export function Layout({
   children?: ComponentChildren;
   refreshSeconds?: number;
 }) {
+  const auth = authState.getStore();
+
   return (
     <html lang="en">
       <head>
@@ -69,6 +72,16 @@ export function Layout({
         </main>
         <footer>
           <a href="/about">About</a>
+          {auth &&
+            (auth.signedIn ? (
+              <form method="post" action="/auth/signout">
+                <button type="submit" class="link-button">
+                  Sign out
+                </button>
+              </form>
+            ) : (
+              <a href="/auth/signin">Sign in</a>
+            ))}
         </footer>
       </body>
     </html>
