@@ -14,7 +14,13 @@ export function ReposPage({
   trajectories: Trajectory[];
   notice?: string;
 }) {
-  const success = notice?.startsWith("Added") || notice?.startsWith("Deleted");
+  const activeRepos = repos.filter((repo) => !repo.archivedAt);
+  const archivedRepos = repos.filter((repo) => repo.archivedAt);
+  const success =
+    notice?.startsWith("Added") ||
+    notice?.startsWith("Deleted") ||
+    notice?.startsWith("Archived") ||
+    notice?.startsWith("Unarchived");
   return (
     <Layout title="Repositories" section="settings">
       <div class="page-header">
@@ -32,43 +38,90 @@ export function ReposPage({
           started.
         </EmptyState>
       ) : (
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Repository</th>
-                <th>Trajectories</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-            <tbody>
-              {repos.map((repo) => {
-                const repoTrajectories = trajectories.filter(
-                  (trajectory) => trajectory.repoId === repo.id,
-                );
-                return (
+        <>
+          {activeRepos.length > 0 && (
+            <div class="table-wrap">
+              <table>
+                <thead>
                   <tr>
-                    <td>
-                      <a class="repo-name" href={`/repos/${repo.id}`}>
-                        {repo.name}
-                      </a>
-                    </td>
-                    <td>
-                      <a
-                        href={`/trajectories?repoId=${encodeURIComponent(repo.id)}`}
-                      >
-                        {repoTrajectories.length}
-                      </a>
-                    </td>
-                    <td>{repoTrajectories.filter(isActive).length}</td>
+                    <th>Repository</th>
+                    <th>Trajectories</th>
+                    <th>Active</th>
+                    <th aria-label="Actions" />
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {activeRepos.map((repo) => (
+                    <RepoRow repo={repo} trajectories={trajectories} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {archivedRepos.length > 0 && (
+            <div class="section-heading">
+              <h2>Archived</h2>
+              <span class="count">
+                {archivedRepos.length} hidden from the dashboard
+              </span>
+            </div>
+          )}
+          {archivedRepos.length > 0 && (
+            <div class="table-wrap">
+              <table>
+                <tbody>
+                  {archivedRepos.map((repo) => (
+                    <RepoRow repo={repo} trajectories={trajectories} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </Layout>
+  );
+}
+
+function RepoRow({
+  repo,
+  trajectories,
+}: {
+  repo: Repo;
+  trajectories: Trajectory[];
+}) {
+  const repoTrajectories = trajectories.filter(
+    (trajectory) => trajectory.repoId === repo.id,
+  );
+  return (
+    <tr>
+      <td>
+        <a class="repo-name" href={`/repos/${repo.id}`}>
+          {repo.name}
+        </a>
+      </td>
+      <td>
+        <a href={`/trajectories?repoId=${encodeURIComponent(repo.id)}`}>
+          {repoTrajectories.length}
+        </a>
+      </td>
+      <td>{repoTrajectories.filter(isActive).length}</td>
+      <td>
+        {repo.archivedAt ? (
+          <form method="post" action={`/repos/${repo.id}/unarchive`}>
+            <button class="button button-small" type="submit">
+              Unarchive
+            </button>
+          </form>
+        ) : (
+          <form method="post" action={`/repos/${repo.id}/archive`}>
+            <button class="button button-small" type="submit">
+              Archive
+            </button>
+          </form>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -145,6 +198,19 @@ export function RepoDetailPage({
           >
             New trajectory
           </a>
+          {repo.archivedAt ? (
+            <form method="post" action={`/repos/${repo.id}/unarchive`}>
+              <button class="button" type="submit">
+                Unarchive
+              </button>
+            </form>
+          ) : (
+            <form method="post" action={`/repos/${repo.id}/archive`}>
+              <button class="button" type="submit">
+                Archive
+              </button>
+            </form>
+          )}
           <form method="post" action={`/repos/${repo.id}/delete`}>
             <button class="button button-danger" type="submit">
               Delete repository
@@ -153,6 +219,12 @@ export function RepoDetailPage({
         </div>
       </div>
       {notice && <div class="notice">{notice}</div>}
+      {repo.archivedAt && (
+        <div class="notice">
+          This repository is archived and hidden from the dashboard and
+          trajectory forms.
+        </div>
+      )}
       <div class="grid grid-3 repo-stats">
         <section class="card">
           <h2>Default branch</h2>

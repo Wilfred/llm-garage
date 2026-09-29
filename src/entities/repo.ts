@@ -15,6 +15,9 @@ export class RepoEntity {
   @Column("text")
   defaultBranch!: string;
 
+  @Column("datetime", { nullable: true })
+  archivedAt!: Date | null;
+
   @Column("datetime")
   createdAt!: Date;
 }
