@@ -5,8 +5,11 @@ import {
   NotFoundPage,
   TrajectoryDetailPage,
   TrajectoriesPage,
-  type TurnTranscript,
 } from "../../views/pages/trajectories";
+import {
+  loadTrajectoryTranscript,
+  loadTurnTranscripts,
+} from "../../transcript";
 import { ComparisonPage } from "../../views/pages/comparisons";
 import { renderPage } from "../../views/render";
 import { formField, formFields, queryString } from "./forms";
@@ -139,7 +142,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
       Promise.all(
         trajectories.map(async (trajectory) => ({
           trajectory,
-          transcript: await loadTranscript(store, trajectory.id),
+          transcript: await loadTurnTranscripts(store, trajectory.id),
         })),
       ),
     ]);
@@ -170,7 +173,7 @@ export function createTrajectoriesRouter(store: DataStore): Router {
       return;
     }
     const [transcript, models] = await Promise.all([
-      loadTranscript(store, trajectory.id),
+      loadTurnTranscripts(store, trajectory.id),
       store.listModels(),
     ]);
     const model = models.find(
@@ -187,6 +190,15 @@ export function createTrajectoriesRouter(store: DataStore): Router {
           />,
         ),
       );
+  });
+
+  router.get("/trajectories/:id/transcript", async (req, res) => {
+    const transcript = await loadTrajectoryTranscript(store, req.params.id);
+    if (transcript === undefined) {
+      res.status(404).type("text").send("That trajectory does not exist.\n");
+      return;
+    }
+    res.type("text").send(transcript);
   });
 
   router.post("/trajectories/:id/prompts", async (req, res) => {
@@ -225,19 +237,6 @@ function validId(
   return id !== undefined && entries.some((entry) => entry.id === id)
     ? id
     : undefined;
-}
-
-async function loadTranscript(
-  store: DataStore,
-  trajectoryId: string,
-): Promise<TurnTranscript[]> {
-  const turns = await store.listTurns(trajectoryId);
-  return Promise.all(
-    turns.map(async (turn) => ({
-      turn,
-      events: await store.listRunEvents(turn.id),
-    })),
-  );
 }
 
 export function titleFromTask(taskPrompt: string): string {

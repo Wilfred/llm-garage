@@ -3,7 +3,7 @@ import { sumUsage } from "../../usage";
 import { StatusBadge, UsageSummary } from "../components";
 import { Layout } from "../layout";
 import { renderMarkdown } from "../markdown";
-import type { TurnTranscript } from "./trajectories";
+import type { TurnTranscript } from "../../transcript";
 
 export type ComparisonColumn = {
   trajectory: Trajectory;

@@ -3,6 +3,7 @@ import { formatUsage, type TokenUsage } from "../usage";
 import type {
   ConversationMessage,
   GarageSettings,
+  TrajectorySummary,
   TrajectoryWorker,
   WorkerContext,
 } from "./types";
@@ -65,6 +66,16 @@ const fetchUrlArgumentsSchema = z.object({
 
 const garageSettingsArgumentsSchema = z.object({});
 
+const listTrajectoriesArgumentsSchema = z.object({});
+
+// Transcripts can run to megabytes, so they are read a page at a time.
+const transcriptPageLength = 50_000;
+
+const readTrajectoryArgumentsSchema = z.object({
+  id: z.string().min(1).max(200),
+  offset: z.number().int().nonnegative().optional().default(0),
+});
+
 const searchWebArgumentsSchema = z.object({
   query: z
     .string()
@@ -107,6 +118,44 @@ const tools = [
         type: "object",
         properties: {},
         required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_trajectories",
+      description:
+        "List every trajectory in this LLM Garage instance, most recently updated first, including this one.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "read_trajectory",
+      description: `Read the full transcript of a trajectory: its prompts, model outputs, tool calls and tool results. Long transcripts are returned ${transcriptPageLength.toLocaleString("en-US")} characters at a time; pass nextOffset back as offset to read on.`,
+      parameters: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "The trajectory ID, as given by list_trajectories.",
+          },
+          offset: {
+            type: "integer",
+            minimum: 0,
+            description:
+              "Character offset to start reading from. Defaults to 0.",
+          },
+        },
+        required: ["id"],
         additionalProperties: false,
       },
     },
@@ -351,6 +400,57 @@ export class OpenRouterWorker implements TrajectoryWorker {
           parsed.data,
           context,
           async (): Promise<GarageSettings> => garageSettings(),
+        );
+      }
+      case "list_trajectories": {
+        const parsed = listTrajectoriesArgumentsSchema.safeParse(rawArguments);
+        if (!parsed.success) {
+          return JSON.stringify({
+            error: "Invalid list_trajectories arguments",
+          });
+        }
+        const listTrajectories = context.listTrajectories;
+        if (!listTrajectories) {
+          return JSON.stringify({
+            error: "Trajectory listing is not configured",
+          });
+        }
+        return this.executeTool(
+          "list_trajectories",
+          parsed.data,
+          context,
+          async (): Promise<TrajectorySummary[]> => listTrajectories(),
+        );
+      }
+      case "read_trajectory": {
+        const parsed = readTrajectoryArgumentsSchema.safeParse(rawArguments);
+        if (!parsed.success) {
+          return JSON.stringify({ error: "Invalid read_trajectory arguments" });
+        }
+        const trajectoryTranscript = context.trajectoryTranscript;
+        if (!trajectoryTranscript) {
+          return JSON.stringify({
+            error: "Trajectory reading is not configured",
+          });
+        }
+        return this.executeTool(
+          "read_trajectory",
+          parsed.data,
+          context,
+          async () => {
+            const { id, offset } = parsed.data;
+            const transcript = await trajectoryTranscript(id);
+            if (transcript === undefined) {
+              throw new Error(`No trajectory with ID ${id}`);
+            }
+            const end = offset + transcriptPageLength;
+            return {
+              id,
+              totalLength: transcript.length,
+              ...(end < transcript.length ? { nextOffset: end } : {}),
+              transcript: transcript.slice(offset, end),
+            };
+          },
         );
       }
       case "run_command": {
