@@ -30,7 +30,6 @@ export type TrajectorySummary = {
   status: string;
   model: string;
   repo: string;
-  parentId?: string;
   comparisonId?: string;
   prUrl?: string;
   createdAt: string;
