@@ -7,7 +7,6 @@ void test("formats every prompt and event of a trajectory", () => {
   const transcript = formatTrajectoryTranscript({
     trajectory: {
       id: "trajectory-1",
-      rootId: "trajectory-1",
       repoId: "repo-1",
       title: "Fix the parser",
       status: "succeeded",

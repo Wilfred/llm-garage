@@ -693,9 +693,6 @@ export class DatabaseDataStore implements DataStore {
           models.find(({ id }) => id === trajectory.modelId)?.name ??
           trajectory.modelId,
         repo: repo ? `${repo.owner}/${repo.name}` : trajectory.repoId,
-        ...(trajectory.parentId === undefined
-          ? {}
-          : { parentId: trajectory.parentId }),
         ...(trajectory.comparisonId === undefined
           ? {}
           : { comparisonId: trajectory.comparisonId }),
