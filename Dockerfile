@@ -1,7 +1,7 @@
 # Multi-stage build for the llm-garage harness app.
 
 # Build: compile TypeScript
-FROM node:22-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -13,13 +13,13 @@ ARG BUILD_TIME
 RUN node -e 'require("node:fs").writeFileSync("build-info.json", JSON.stringify({ gitCommit: process.env.GIT_COMMIT === "unknown" ? null : process.env.GIT_COMMIT, imageBuildTime: process.env.BUILD_TIME || new Date().toISOString() }))'
 
 # Production dependencies only
-FROM node:22-bookworm-slim AS deps
+FROM node:26-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # Runtime
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DATA_DIR=/app/data
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
